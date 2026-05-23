@@ -53,9 +53,11 @@ const handleClick = (
   <style>
 {`
   .map-container svg {
-    width: 100%;
-    height: 100%;
-    max-height: 85vh;
+    width: auto;
+    height: 90%;
+    max-width: 100%;
+    display: block;
+    margin: auto;
   }
 
   /* DEFAULT */
@@ -137,7 +139,7 @@ const handleClick = (
   }}
 >
   <div
-    className="map-container w-full h-full flex items-center justify-center p-8 bg-[#E0F2FE]"
+    className="map-container w-full h-full flex items-center justify-center overflow-hidden bg-[#E0F2FE]"
     dangerouslySetInnerHTML={{ __html: svgContent }}
     onClick={(e) => handleClick(e, zoomToElement)}
   />

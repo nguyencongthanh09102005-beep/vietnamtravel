@@ -2838,11 +2838,11 @@ export function ProvinceDetails({ province }: { province: string }) {
   : isDongThap
   ? "/banner/dongthap.jpg"
   : isVinhLong
-  ? "/banner/vinhtlong.jpg"
+  ? "/banner/vinhlong.jpg"
   : isCanTho
   ? "/banner/cantho.jpg"
   : isAnGiang
-  ? "/banner/angiang.jpg"
+  ? "/banner/angiang.webp"
   : isCaMau
   ? "/banner/camau.jpg"
   : isTruongSa
@@ -2930,9 +2930,11 @@ export function ProvinceDetails({ province }: { province: string }) {
       {/* Banner */}
       <div className="relative w-full h-[240px] shrink-0">
         <ImageWithFallback 
-          src={bannerImg} 
-          alt={displayTitle}
-          className="w-full h-full object-cover"
+           key={province}
+           src={bannerImg}
+           alt={displayTitle}
+           className="w-full h-full object-cover transition-opacity duration-300"
+           loading="eager"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
         <div className="absolute bottom-6 left-6 right-6 flex items-end justify-between">
@@ -2978,7 +2980,7 @@ export function ProvinceDetails({ province }: { province: string }) {
       <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         <AnimatePresence mode="wait">
           <motion.div
-            key={`${province}-${activeTab}`}
+            key={`${province}-${activeTab}-${bannerImg}`}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}

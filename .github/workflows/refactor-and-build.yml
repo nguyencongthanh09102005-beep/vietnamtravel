@@ -30,7 +30,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Refactor province details
         run: node scripts/refactor-province-details.mjs
@@ -41,8 +40,10 @@ jobs:
       - name: Validate referenced assets
         run: node scripts/check-assets.mjs
 
-      - name: Install dependencies
-        run: npm install
+      - name: Regenerate clean lockfile and install dependencies
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
@@ -51,7 +52,7 @@ jobs:
         run: npm run build
 
       - name: Install image optimizer
-        run: npm install --no-save --package-lock=false sharp
+        run: npm install --no-save --package-lock=false --no-audit --no-fund sharp
 
       - name: Optimize oversized images
         run: node scripts/optimize-images.mjs

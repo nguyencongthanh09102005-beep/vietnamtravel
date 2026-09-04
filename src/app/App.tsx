@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Search } from 'lucide-react';
 import { ProvinceDetails } from './components/ProvinceDetails';
+import { TravelAiAssistant } from './components/TravelAiAssistant';
 import { VietnamMap } from './components/VietnamMap';
 import { provincesData } from '../data/provincesData';
 import { normalizeSearchText } from '../utils/text';
@@ -10,6 +11,7 @@ export default function App() {
   const [selectedProvince, setSelectedProvince] = useState('');
   const [keyword, setKeyword] = useState('');
   const [started, setStarted] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const provinces = useMemo(
     () => Object.keys(provincesData) as Array<keyof typeof provincesData>,
@@ -157,8 +159,22 @@ export default function App() {
               </div>
             </section>
 
-            <section className="flex h-[66dvh] w-full flex-col md:h-[calc(100dvh-3rem)] md:flex-1">
-              <ProvinceDetails province={selectedProvince} />
+            <section className="relative flex h-[66dvh] w-full min-w-0 flex-col md:h-[calc(100dvh-3rem)] md:flex-1">
+              <div
+                className={`grid h-full min-h-0 gap-4 transition-all ${
+                  aiOpen ? 'md:grid-cols-2' : 'grid-cols-1'
+                }`}
+              >
+                <div className="min-h-0 min-w-0">
+                  <ProvinceDetails province={selectedProvince} />
+                </div>
+
+                <TravelAiAssistant
+                  province={selectedProvince}
+                  open={aiOpen}
+                  onToggle={() => setAiOpen((value) => !value)}
+                />
+              </div>
             </section>
           </div>
         </motion.main>

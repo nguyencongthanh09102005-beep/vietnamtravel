@@ -107,6 +107,14 @@ export default {
     if (aiChats) databaseRow.ai_chats = aiChats;
     if (itineraries) databaseRow.itineraries = itineraries;
 
+    const fallbackRow: StoredTravelData = {
+      user_id: session.user.id,
+      saved_provinces: savedProvinces,
+      visited_provinces: visitedProvinces,
+      ai_chats: aiChats,
+      itineraries,
+    };
+
     const response = await supabaseRestFetch('/user_travel_data?on_conflict=user_id', session.accessToken, {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
@@ -120,6 +128,6 @@ export default {
     }
 
     const rows = (await response.json()) as StoredTravelData[];
-    return json({ data: toClientData(rows[0] ?? (databaseRow as StoredTravelData)) }, 200, session.cookies);
+    return json({ data: toClientData(rows[0] ?? fallbackRow) }, 200, session.cookies);
   },
 };

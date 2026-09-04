@@ -291,17 +291,16 @@ export function TravelAiAssistant({
         [province]: [...(previous[province] ?? []), assistantMessage].slice(-40),
       }));
     } catch {
+      const errorMessage: ChatMessage = {
+        id: makeId(),
+        role: 'assistant',
+        text: 'Kết nối AI đang gặp lỗi. Bạn vẫn có thể dùng các nút Google Maps bên dưới.',
+        mapActions: localFallbackActions(text, provinceName),
+      };
+
       setMessagesByProvince((previous) => ({
         ...previous,
-        [province]: [
-          ...(previous[province] ?? []),
-          {
-            id: makeId(),
-            role: 'assistant',
-            text: 'Kết nối AI đang gặp lỗi. Bạn vẫn có thể dùng các nút Google Maps bên dưới.',
-            mapActions: localFallbackActions(text, provinceName),
-          },
-        ].slice(-40),
+        [province]: [...(previous[province] ?? []), errorMessage].slice(-40),
       }));
     } finally {
       setLoading(false);

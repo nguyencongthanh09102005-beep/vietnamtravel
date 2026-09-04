@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: vietnam-travel-refactor-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -31,16 +35,22 @@ jobs:
       - name: Refactor province details
         run: node scripts/refactor-province-details.mjs
 
+      - name: Remove unused generated UI kit
+        run: rm -rf src/app/components/ui
+
       - name: Validate referenced assets
         run: node scripts/check-assets.mjs
 
       - name: Install dependencies
         run: npm install
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build production bundle
         run: npm run build
 
-      - name: Commit generated refactor
+      - name: Commit generated cleanup
         if: github.event_name == 'push'
         run: |
           if git diff --quiet; then
@@ -49,6 +59,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app/components/ProvinceDetails.tsx src/data/provinceDetailsData.ts package-lock.json
-          git commit -m "refactor(data): split province content and update 2025 administrative stats [skip ci]"
+          git add -A
+          git commit -m "refactor: generate clean province data and remove unused UI kit [skip ci]"
           git push

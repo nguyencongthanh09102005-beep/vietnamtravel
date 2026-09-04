@@ -1,0 +1,74 @@
+name: Refactor and build
+
+on:
+  push:
+    branches:
+      - refactor/portfolio-cleanup
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: vietnam-travel-refactor-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-and-build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Refactor province details
+        run: node scripts/refactor-province-details.mjs
+
+      - name: Normalize generated catalog typing
+        run: node scripts/fix-generated-types.mjs
+
+      - name: Remove unused generated UI kit
+        run: rm -rf src/app/components/ui
+
+      - name: Validate referenced assets
+        run: node scripts/check-assets.mjs
+
+      - name: Regenerate clean lockfile and install dependencies
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Install image optimizer
+        run: npm install --no-save --package-lock=false --no-audit --no-fund sharp
+
+      - name: Optimize oversized images
+        run: node scripts/optimize-images.mjs
+
+      - name: Commit generated cleanup
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: generate clean province data and optimize assets [skip ci]"
+          git push

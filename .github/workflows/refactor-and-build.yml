@@ -50,6 +50,12 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
+      - name: Install image optimizer
+        run: npm install --no-save --package-lock=false sharp
+
+      - name: Optimize oversized images
+        run: node scripts/optimize-images.mjs
+
       - name: Commit generated cleanup
         if: github.event_name == 'push'
         run: |
@@ -60,5 +66,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "refactor: generate clean province data and remove unused UI kit [skip ci]"
+          git commit -m "refactor: generate clean province data and optimize assets [skip ci]"
           git push

@@ -177,8 +177,8 @@ export default function App() {
         transition={{ duration: 0.6 }}
         className="min-h-dvh"
       >
-        <div className="flex min-h-dvh flex-col gap-6 bg-white p-4 font-sans md:flex-row md:p-6">
-          <section className="flex h-[52dvh] w-full shrink-0 flex-col md:h-[calc(100dvh-3rem)] md:w-[45%]">
+        <div className="flex min-h-dvh flex-col gap-5 bg-gradient-to-br from-white via-sky-50/35 to-emerald-50/30 p-4 font-sans md:flex-row md:p-6">
+          <section className="flex h-[52dvh] w-full shrink-0 flex-col md:h-[calc(100dvh-3rem)] md:w-[46%]">
             <div className="relative mb-4 shrink-0 px-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -213,7 +213,7 @@ export default function App() {
                   placeholder="Tìm tỉnh, ví dụ: Ha Noi..."
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-gray-200 bg-white/90 py-2.5 pl-9 pr-3 text-sm shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                   aria-controls="province-search-results"
                   aria-expanded={Boolean(keyword)}
                 />
@@ -233,7 +233,7 @@ export default function App() {
                         role="option"
                         aria-selected={selectedProvince === province}
                         onClick={() => selectProvince(province)}
-                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none"
+                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-sky-50 focus-visible:bg-sky-50 focus-visible:outline-none"
                       >
                         {provincesData[province].name}
                       </button>
@@ -257,14 +257,15 @@ export default function App() {
 
           <section className="relative flex h-[66dvh] w-full min-w-0 flex-col md:h-[calc(100dvh-3rem)] md:flex-1">
             <div
-              className={`grid h-full min-h-0 gap-4 transition-all ${
-                aiOpen ? 'md:grid-cols-2' : 'grid-cols-1'
+              className={`h-full min-h-0 transition-all duration-300 ${
+                aiOpen ? 'invisible scale-[0.985] opacity-0' : 'visible scale-100 opacity-100'
               }`}
+              aria-hidden={aiOpen}
             >
-              <div className="min-h-0 min-w-0">
-                <ProvinceDetails province={selectedProvince} />
-              </div>
+              <ProvinceDetails province={selectedProvince} />
+            </div>
 
+            <div className={aiOpen ? 'absolute inset-0 z-20 min-h-0' : 'contents'}>
               <TravelAiAssistant
                 province={selectedProvince}
                 open={aiOpen}

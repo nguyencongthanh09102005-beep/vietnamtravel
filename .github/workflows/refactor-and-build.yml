@@ -34,6 +34,9 @@ jobs:
       - name: Refactor province details
         run: node scripts/refactor-province-details.mjs
 
+      - name: Normalize generated catalog typing
+        run: node scripts/fix-generated-types.mjs
+
       - name: Remove unused generated UI kit
         run: rm -rf src/app/components/ui
 

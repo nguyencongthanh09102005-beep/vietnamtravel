@@ -13,6 +13,10 @@ const TABS: Array<{ id: TabType; label: string; icon: ComponentType<{ className?
   { id: 'cuisine', label: 'Ẩm thực', icon: Utensils },
 ];
 
+function formatStatValue(value: string) {
+  return value.replace(/\s*\(NQ\s*202\/2025\/QH15\)\s*$/i, '').trim();
+}
+
 export function ProvinceDetails({ province }: { province: string }) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const current = provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
@@ -95,12 +99,14 @@ export function ProvinceDetails({ province }: { province: string }) {
           >
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <p className="leading-relaxed text-gray-600">{data.overview.description}</p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+                <p className="text-[15px] leading-7 text-gray-600">{data.overview.description}</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 sm:gap-4">
                   {data.overview.stats.map((stat) => (
-                    <div key={stat.label} className="rounded-2xl bg-gray-50 p-4">
-                      <p className="mb-1 text-xs text-gray-500">{stat.label}</p>
-                      <p className="font-semibold text-gray-900">{stat.value}</p>
+                    <div key={stat.label} className="min-w-0 rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50 to-white p-4 shadow-sm">
+                      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">{stat.label}</p>
+                      <p className="break-words text-[15px] font-semibold leading-6 text-gray-900 sm:text-base">
+                        {formatStatValue(stat.value)}
+                      </p>
                     </div>
                   ))}
                 </div>

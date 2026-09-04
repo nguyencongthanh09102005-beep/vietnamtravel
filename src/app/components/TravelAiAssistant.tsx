@@ -35,14 +35,53 @@ interface ApiResponse {
   error?: string;
 }
 
+interface UserDataResponse {
+  data?: {
+    aiChats?: unknown;
+  };
+  error?: string;
+}
+
 interface TravelAiAssistantProps {
   province: string;
   open: boolean;
   onToggle: () => void;
+  authenticated?: boolean;
 }
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isMapAction(value: unknown): value is MapAction {
+  if (!value || typeof value !== 'object') return false;
+  const action = value as Partial<MapAction>;
+  return typeof action.label === 'string' && typeof action.url === 'string';
+}
+
+function parseStoredChats(value: unknown): Record<string, ChatMessage[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: Record<string, ChatMessage[]> = {};
+
+  for (const [province, rawMessages] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(rawMessages)) continue;
+    result[province] = rawMessages
+      .filter((message) => message && typeof message === 'object')
+      .map((message) => {
+        const raw = message as Partial<ChatMessage>;
+        return {
+          id: typeof raw.id === 'string' ? raw.id : makeId(),
+          role: raw.role === 'user' ? 'user' : 'assistant',
+          text: typeof raw.text === 'string' ? raw.text : '',
+          mapActions: Array.isArray(raw.mapActions) ? raw.mapActions.filter(isMapAction) : undefined,
+          livePlaces: typeof raw.livePlaces === 'boolean' ? raw.livePlaces : undefined,
+        } satisfies ChatMessage;
+      })
+      .filter((message) => message.text)
+      .slice(-40);
+  }
+
+  return result;
 }
 
 function createStarterMessage(province: string): ChatMessage | null {
@@ -106,15 +145,69 @@ function localFallbackActions(message: string, provinceName: string): MapAction[
       ];
 }
 
-export function TravelAiAssistant({ province, open, onToggle }: TravelAiAssistantProps) {
+export function TravelAiAssistant({
+  province,
+  open,
+  onToggle,
+  authenticated = false,
+}: TravelAiAssistantProps) {
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [messagesByProvince, setMessagesByProvince] = useState<Record<string, ChatMessage[]>>({});
+  const [storageHydrated, setStorageHydrated] = useState(!authenticated);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const current = provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
   const provinceName = current?.title ?? '';
   const messages = province ? messagesByProvince[province] ?? [] : [];
+
+  useEffect(() => {
+    let active = true;
+
+    if (!authenticated) {
+      setStorageHydrated(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setStorageHydrated(false);
+    const hydrate = async () => {
+      try {
+        const response = await fetch('/api/user-data', { cache: 'no-store' });
+        const payload = (await response.json()) as UserDataResponse;
+        if (!active || !response.ok) return;
+        setMessagesByProvince(parseStoredChats(payload.data?.aiChats));
+      } catch {
+        // Keep local chat if cloud data is temporarily unavailable.
+      } finally {
+        if (active) setStorageHydrated(true);
+      }
+    };
+
+    void hydrate();
+    return () => {
+      active = false;
+    };
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated || !storageHydrated) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+
+    saveTimerRef.current = setTimeout(() => {
+      void fetch('/api/user-data', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiChats: messagesByProvince }),
+      }).catch(() => undefined);
+    }, 800);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [authenticated, messagesByProvince, storageHydrated]);
 
   useEffect(() => {
     if (!province || messagesByProvince[province]) return;
@@ -162,7 +255,7 @@ export function TravelAiAssistant({ province, open, onToggle }: TravelAiAssistan
     setLoading(true);
     setMessagesByProvince((previous) => ({
       ...previous,
-      [province]: [...(previous[province] ?? []), userMessage],
+      [province]: [...(previous[province] ?? []), userMessage].slice(-40),
     }));
 
     try {
@@ -195,7 +288,7 @@ export function TravelAiAssistant({ province, open, onToggle }: TravelAiAssistan
 
       setMessagesByProvince((previous) => ({
         ...previous,
-        [province]: [...(previous[province] ?? []), assistantMessage],
+        [province]: [...(previous[province] ?? []), assistantMessage].slice(-40),
       }));
     } catch {
       setMessagesByProvince((previous) => ({
@@ -208,7 +301,7 @@ export function TravelAiAssistant({ province, open, onToggle }: TravelAiAssistan
             text: 'Kết nối AI đang gặp lỗi. Bạn vẫn có thể dùng các nút Google Maps bên dưới.',
             mapActions: localFallbackActions(text, provinceName),
           },
-        ],
+        ].slice(-40),
       }));
     } finally {
       setLoading(false);
@@ -239,8 +332,12 @@ export function TravelAiAssistant({ province, open, onToggle }: TravelAiAssistan
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="truncate text-sm font-bold text-gray-950">Trợ lý AI du lịch</h2>
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                Theo tỉnh
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  authenticated ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                }`}
+              >
+                {authenticated ? (storageHydrated ? 'Đã đồng bộ' : 'Đang đồng bộ') : 'Chế độ khách'}
               </span>
             </div>
             <p className="truncate text-xs text-gray-500">

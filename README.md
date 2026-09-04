@@ -1,6 +1,6 @@
 # Vietnam Travel
 
-Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá Việt Nam thông qua bản đồ SVG, thông tin tổng quan, lịch sử, địa điểm nổi bật và ẩm thực của từng tỉnh thành.
+Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá Việt Nam thông qua bản đồ SVG, thông tin tổng quan, lịch sử, địa điểm nổi bật, ẩm thực và trợ lý AI theo từng tỉnh thành.
 
 ## Điểm nổi bật
 
@@ -8,10 +8,14 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 - Tìm tỉnh thành bằng tiếng Việt có dấu hoặc không dấu.
 - Chọn tỉnh từ ô tìm kiếm sẽ tự đồng bộ và zoom bản đồ tới khu vực tương ứng.
 - Nội dung được chia thành 4 nhóm: Tổng quan, Lịch sử, Địa điểm và Ẩm thực.
+- Trợ lý AI du lịch dạng chat, thu gọn/mở rộng ngay bên cạnh phần thông tin tỉnh.
+- Mỗi tỉnh có lịch sử chat riêng; AI bị khóa ngữ cảnh theo tỉnh đang chọn.
+- AI hỗ trợ gợi ý lịch trình, địa điểm đáng đến, ẩm thực, quán ăn và cách di chuyển.
+- Tích hợp Google Maps URL để tìm địa điểm và mở chỉ đường mà không cần API key.
+- Có thể dùng Google Places API (New) để bổ sung dữ liệu quán ăn/địa điểm trực tiếp khi cấu hình key.
 - Dữ liệu hành chính của các đơn vị hình thành sau sắp xếp năm 2025 có nguồn tham khảo chính thức ngay trong giao diện.
 - Giao diện responsive cho desktop và thiết bị di động.
 - Có loading/error state cho bản đồ và fallback khi hình ảnh bị lỗi.
-- Ảnh dung lượng lớn được tối ưu tự động trong quy trình cleanup.
 - Có TypeScript strict checking và production build trong GitHub Actions.
 
 ## Công nghệ
@@ -23,15 +27,23 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 - Framer Motion
 - Lucide React
 - react-zoom-pan-pinch
+- Vercel Functions
+- Gemini API
+- Google Maps URLs
+- Google Places API (tùy chọn)
 
 ## Cấu trúc chính
 
 ```text
+api/
+└── ai.ts
+
 src/
 ├── app/
 │   ├── App.tsx
 │   └── components/
 │       ├── ProvinceDetails.tsx
+│       ├── TravelAiAssistant.tsx
 │       ├── VietnamMap.tsx
 │       └── figma/
 │           └── ImageWithFallback.tsx
@@ -43,10 +55,13 @@ src/
 ├── styles/
 │   └── utilities.css
 └── utils/
+    ├── googleMaps.ts
     └── text.ts
 ```
 
-`provincesData.ts` là nguồn metadata duy nhất cho tên hiển thị và banner. `provinceDetailsData.ts` chứa nội dung chi tiết; component `ProvinceDetails` chỉ chịu trách nhiệm render giao diện, không còn ôm toàn bộ data và chuỗi điều kiện theo từng tỉnh.
+`provincesData.ts` là nguồn metadata duy nhất cho tên hiển thị và banner. `provinceDetailsData.ts` chứa nội dung chi tiết; component `ProvinceDetails` chỉ chịu trách nhiệm render giao diện.
+
+`TravelAiAssistant.tsx` quản lý giao diện và lịch sử chat theo từng tỉnh. `api/ai.ts` chạy server-side trên Vercel để giữ API key khỏi frontend, kiểm tra phạm vi tỉnh, lấy dữ liệu Google Places khi có cấu hình và gửi ngữ cảnh tới Gemini.
 
 ## Chạy dự án
 
@@ -65,6 +80,45 @@ npm run build
 npm run preview
 ```
 
+## Cấu hình AI trên Vercel
+
+Không đưa API key vào source code hoặc commit lên GitHub.
+
+Trong Vercel Project → Settings → Environment Variables, thêm:
+
+```text
+GEMINI_API_KEY=<Gemini API key của bạn>
+GEMINI_MODEL=gemini-3.7-flash
+```
+
+`GEMINI_MODEL` là tùy chọn. Nếu không khai báo, backend dùng `gemini-3.7-flash`.
+
+Sau khi thêm biến môi trường, redeploy Production để Vercel Function nhận key mới.
+
+## Google Maps và Google Places
+
+### Google Maps URL
+
+Các nút tìm kiếm và chỉ đường dùng Google Maps URL nên hoạt động mà không cần API key. Khi mở chỉ đường và không chỉ định điểm xuất phát, Google Maps có thể sử dụng vị trí hiện tại của người dùng.
+
+### Google Places API (tùy chọn)
+
+Nếu muốn AI tham chiếu dữ liệu địa điểm trực tiếp như tên quán, địa chỉ và rating, bật Places API (New) trong Google Cloud và thêm biến môi trường:
+
+```text
+GOOGLE_MAPS_API_KEY=<Google Maps Platform API key>
+```
+
+Backend chỉ gọi Places API cho các câu hỏi có ý định rõ ràng như quán ăn, địa điểm, lịch trình; nếu không có key thì AI vẫn dùng dữ liệu nội bộ và các nút Google Maps vẫn hoạt động.
+
+## Quy tắc phạm vi của AI
+
+- AI chỉ trả lời về tỉnh/thành đang được chọn trên bản đồ.
+- Nếu câu hỏi nhắc tới một tỉnh khác, backend trả lời yêu cầu người dùng đổi tỉnh trước.
+- Mỗi tỉnh lưu một luồng chat riêng ở phía giao diện trong phiên sử dụng hiện tại.
+- Khi lập lịch trình, AI ưu tiên dữ liệu địa điểm/ẩm thực của tỉnh đang chọn và dữ liệu Places trực tiếp nếu có.
+- Với chỉ đường, AI chỉ mô tả ở mức hỗ trợ; đường đi thời gian thực được mở bằng Google Maps.
+
 ## Cách hoạt động của bản đồ
 
 SVG bản đồ chứa `id` cho từng tỉnh/thành. Ứng dụng tải SVG nội bộ, xác định vùng được click, đồng bộ tỉnh đang chọn với panel thông tin và dùng `react-zoom-pan-pinch` để phóng tới vùng tương ứng.
@@ -81,17 +135,15 @@ Nguồn tham khảo chính:
 
 Nội dung du lịch, địa điểm và ẩm thực trong dự án phục vụ mục đích học tập và trình diễn portfolio; các thông tin có tính thời điểm nên được tiếp tục đối chiếu khi sử dụng cho mục đích chính thức.
 
-## Chất lượng repository
+## Kiểm tra chất lượng
 
-Branch refactor sử dụng workflow để:
+GitHub Actions trên `main` chạy:
 
-1. Tách dữ liệu khỏi component lớn theo cách xác định, tránh copy tay hàng nghìn dòng.
-2. Kiểm tra toàn bộ đường dẫn ảnh được tham chiếu.
-3. Loại bỏ bộ UI sinh sẵn không được ứng dụng sử dụng.
-4. Cài dependency tối giản.
-5. Chạy `tsc --noEmit`.
-6. Build production bằng Vite.
-7. Tối ưu ảnh quá lớn mà vẫn giữ nguyên đường dẫn file.
+1. `npm ci`
+2. `npm run typecheck`
+3. `npm run build`
+
+Ngoài ra project có script kiểm tra asset và tối ưu ảnh đã được sử dụng trong đợt refactor ban đầu.
 
 ## Nguồn và attribution
 
@@ -99,6 +151,8 @@ Một phần giao diện ban đầu được khởi tạo từ Figma Make rồi 
 
 ## Hướng phát triển tiếp
 
-- Bổ sung test tương tác cho tìm kiếm và bản đồ.
-- Bổ sung URL routing cho từng tỉnh để có thể chia sẻ trực tiếp.
-- Deploy bản demo công khai và theo dõi Lighthouse/Core Web Vitals.
+- Lưu lịch sử chat vào localStorage hoặc tài khoản người dùng.
+- Bổ sung user location để cá nhân hóa gợi ý gần vị trí hiện tại.
+- Bổ sung URL routing cho từng tỉnh để chia sẻ trực tiếp.
+- Thêm test cho assistant, search và tương tác bản đồ.
+- Theo dõi Lighthouse/Core Web Vitals trên bản production.

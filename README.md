@@ -1,6 +1,6 @@
 # Vietnam Travel
 
-Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá Việt Nam thông qua bản đồ SVG, thông tin tổng quan, lịch sử, địa điểm nổi bật, ẩm thực và trợ lý AI theo từng tỉnh thành.
+Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá Việt Nam thông qua bản đồ SVG, thông tin tổng quan, lịch sử, địa điểm nổi bật, ẩm thực, tài khoản cá nhân và trợ lý AI theo từng tỉnh thành.
 
 ## Điểm nổi bật
 
@@ -8,15 +8,19 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 - Tìm tỉnh thành bằng tiếng Việt có dấu hoặc không dấu.
 - Chọn tỉnh từ ô tìm kiếm sẽ tự đồng bộ và zoom bản đồ tới khu vực tương ứng.
 - Nội dung được chia thành 4 nhóm: Tổng quan, Lịch sử, Địa điểm và Ẩm thực.
+- Đăng ký/đăng nhập bằng email, session lưu bằng HttpOnly cookie.
+- Có chế độ khách để vẫn dùng website khi chưa đăng nhập.
+- Dữ liệu tài khoản có thể lưu riêng theo từng user bằng Supabase + Row Level Security.
 - Trợ lý AI du lịch dạng chat, thu gọn/mở rộng ngay bên cạnh phần thông tin tỉnh.
 - Mỗi tỉnh có lịch sử chat riêng; AI bị khóa ngữ cảnh theo tỉnh đang chọn.
+- Lịch sử chat AI tự đồng bộ cloud khi người dùng đã đăng nhập.
 - AI hỗ trợ gợi ý lịch trình, địa điểm đáng đến, ẩm thực, quán ăn và cách di chuyển.
 - Tích hợp Google Maps URL để tìm địa điểm và mở chỉ đường mà không cần API key.
 - Có thể dùng Google Places API (New) để bổ sung dữ liệu quán ăn/địa điểm trực tiếp khi cấu hình key.
 - Dữ liệu hành chính của các đơn vị hình thành sau sắp xếp năm 2025 có nguồn tham khảo chính thức ngay trong giao diện.
 - Giao diện responsive cho desktop và thiết bị di động.
 - Có loading/error state cho bản đồ và fallback khi hình ảnh bị lỗi.
-- Có TypeScript strict checking và production build trong GitHub Actions.
+- Có TypeScript strict checking cho frontend và API Functions trong GitHub Actions.
 
 ## Công nghệ
 
@@ -28,6 +32,7 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 - Lucide React
 - react-zoom-pan-pinch
 - Vercel Functions
+- Supabase Auth + PostgreSQL + Row Level Security
 - Gemini API
 - Google Maps URLs
 - Google Places API (tùy chọn)
@@ -36,14 +41,27 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 
 ```text
 api/
-└── ai.ts
+├── _lib/
+│   └── supabase.ts
+├── auth/
+│   ├── login.ts
+│   ├── logout.ts
+│   ├── me.ts
+│   └── register.ts
+├── ai.ts
+└── user-data.ts
+
+supabase/
+└── schema.sql
 
 src/
 ├── app/
 │   ├── App.tsx
 │   └── components/
+│       ├── AuthScreen.tsx
 │       ├── ProvinceDetails.tsx
 │       ├── TravelAiAssistant.tsx
+│       ├── UserMenu.tsx
 │       ├── VietnamMap.tsx
 │       └── figma/
 │           └── ImageWithFallback.tsx
@@ -54,6 +72,8 @@ src/
 │   └── vietnam_map_split_new_01_07_(1).svg
 ├── styles/
 │   └── utilities.css
+├── types/
+│   └── auth.ts
 └── utils/
     ├── googleMaps.ts
     └── text.ts
@@ -61,7 +81,7 @@ src/
 
 `provincesData.ts` là nguồn metadata duy nhất cho tên hiển thị và banner. `provinceDetailsData.ts` chứa nội dung chi tiết; component `ProvinceDetails` chỉ chịu trách nhiệm render giao diện.
 
-`TravelAiAssistant.tsx` quản lý giao diện và lịch sử chat theo từng tỉnh. `api/ai.ts` chạy server-side trên Vercel để giữ API key khỏi frontend, kiểm tra phạm vi tỉnh, lấy dữ liệu Google Places khi có cấu hình và gửi ngữ cảnh tới Gemini.
+`TravelAiAssistant.tsx` quản lý giao diện và lịch sử chat theo từng tỉnh. Khi người dùng đã đăng nhập, lịch sử chat được đọc/ghi qua `api/user-data.ts` và lưu vào bản ghi riêng của user.
 
 ## Chạy dự án
 
@@ -76,13 +96,63 @@ Kiểm tra TypeScript và build production:
 
 ```bash
 npm run typecheck
+npm run typecheck:api
 npm run build
 npm run preview
 ```
 
-## Cấu hình AI trên Vercel
+## Biến môi trường
 
-Không đưa API key vào source code hoặc commit lên GitHub.
+Không đưa API key hoặc token bí mật vào source code hay commit lên GitHub. Xem `.env.example` để biết tên biến cần cấu hình.
+
+Trên Vercel Project → Settings → Environment Variables:
+
+```text
+GEMINI_API_KEY=<Gemini API key>
+GEMINI_MODEL=gemini-3.7-flash
+GOOGLE_MAPS_API_KEY=<Google Maps Platform API key, tùy chọn>
+SUPABASE_URL=<Supabase project URL>
+SUPABASE_ANON_KEY=<Supabase anon/public key>
+```
+
+Sau khi thay đổi biến môi trường, redeploy Production để Vercel Functions nhận cấu hình mới.
+
+## Đăng ký, đăng nhập và dữ liệu người dùng
+
+### 1. Tạo project Supabase
+
+Tạo một Supabase project rồi lấy Project URL và anon/public key. Không cần dùng `service_role` key trong website này.
+
+### 2. Tạo bảng và Row Level Security
+
+Mở Supabase SQL Editor và chạy toàn bộ file:
+
+```text
+supabase/schema.sql
+```
+
+Schema tạo:
+
+- `profiles`: tên hiển thị và avatar của user.
+- `user_travel_data`: tỉnh đã lưu, tỉnh đã đi, lịch sử chat AI và lịch trình.
+- Trigger tự tạo dữ liệu mặc định khi có user mới.
+- RLS policy đảm bảo user chỉ SELECT/INSERT/UPDATE bản ghi có `user_id = auth.uid()`.
+
+### 3. Session
+
+Frontend không lưu access token trong JavaScript. Vercel Functions gọi Supabase Auth và đặt access/refresh token trong cookie `HttpOnly`, `SameSite=Lax` và `Secure` ở production.
+
+Các endpoint:
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+- `GET/PATCH /api/user-data`
+
+Nếu Supabase chưa được cấu hình, website vẫn cho phép **Tiếp tục với tư cách khách** để không khóa phần bản đồ/AI hiện có.
+
+## Cấu hình AI trên Vercel
 
 Trong Vercel Project → Settings → Environment Variables, thêm:
 
@@ -93,8 +163,6 @@ GEMINI_MODEL=gemini-3.7-flash
 
 `GEMINI_MODEL` là tùy chọn. Nếu không khai báo, backend dùng `gemini-3.7-flash`.
 
-Sau khi thêm biến môi trường, redeploy Production để Vercel Function nhận key mới.
-
 ## Google Maps và Google Places
 
 ### Google Maps URL
@@ -103,7 +171,7 @@ Các nút tìm kiếm và chỉ đường dùng Google Maps URL nên hoạt đ�
 
 ### Google Places API (tùy chọn)
 
-Nếu muốn AI tham chiếu dữ liệu địa điểm trực tiếp như tên quán, địa chỉ và rating, bật Places API (New) trong Google Cloud và thêm biến môi trường:
+Nếu muốn AI tham chiếu dữ liệu địa điểm trực tiếp như tên quán, địa chỉ và rating, bật Places API (New) trong Google Cloud và thêm:
 
 ```text
 GOOGLE_MAPS_API_KEY=<Google Maps Platform API key>
@@ -114,8 +182,9 @@ Backend chỉ gọi Places API cho các câu hỏi có ý định rõ ràng như
 ## Quy tắc phạm vi của AI
 
 - AI chỉ trả lời về tỉnh/thành đang được chọn trên bản đồ.
-- Nếu câu hỏi nhắc tới một tỉnh khác, backend trả lời yêu cầu người dùng đổi tỉnh trước.
-- Mỗi tỉnh lưu một luồng chat riêng ở phía giao diện trong phiên sử dụng hiện tại.
+- Nếu câu hỏi nhắc tới một tỉnh khác, backend yêu cầu người dùng đổi tỉnh trước.
+- Mỗi tỉnh có một luồng chat riêng.
+- Với tài khoản đã đăng nhập, chat được đồng bộ vào `user_travel_data.ai_chats`; chế độ khách chỉ giữ dữ liệu cục bộ trong phiên.
 - Khi lập lịch trình, AI ưu tiên dữ liệu địa điểm/ẩm thực của tỉnh đang chọn và dữ liệu Places trực tiếp nếu có.
 - Với chỉ đường, AI chỉ mô tả ở mức hỗ trợ; đường đi thời gian thực được mở bằng Google Maps.
 
@@ -141,7 +210,8 @@ GitHub Actions trên `main` chạy:
 
 1. `npm ci`
 2. `npm run typecheck`
-3. `npm run build`
+3. `npm run typecheck:api`
+4. `npm run build`
 
 Ngoài ra project có script kiểm tra asset và tối ưu ảnh đã được sử dụng trong đợt refactor ban đầu.
 
@@ -151,8 +221,9 @@ Một phần giao diện ban đầu được khởi tạo từ Figma Make rồi 
 
 ## Hướng phát triển tiếp
 
-- Lưu lịch sử chat vào localStorage hoặc tài khoản người dùng.
+- Thêm giao diện bookmark tỉnh / đã đi để dùng hai trường dữ liệu có sẵn.
+- Thêm trang quản lý lịch trình cá nhân.
 - Bổ sung user location để cá nhân hóa gợi ý gần vị trí hiện tại.
 - Bổ sung URL routing cho từng tỉnh để chia sẻ trực tiếp.
-- Thêm test cho assistant, search và tương tác bản đồ.
+- Thêm test cho auth, assistant, search và tương tác bản đồ.
 - Theo dõi Lighthouse/Core Web Vitals trên bản production.

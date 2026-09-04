@@ -1,0 +1,54 @@
+name: Refactor and build
+
+on:
+  push:
+    branches:
+      - refactor/portfolio-cleanup
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-and-build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Refactor province details
+        run: node scripts/refactor-province-details.mjs
+
+      - name: Validate referenced assets
+        run: node scripts/check-assets.mjs
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Commit generated refactor
+        if: github.event_name == 'push'
+        run: |
+          if git diff --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/components/ProvinceDetails.tsx src/data/provinceDetailsData.ts package-lock.json
+          git commit -m "refactor(data): split province content and update 2025 administrative stats [skip ci]"
+          git push

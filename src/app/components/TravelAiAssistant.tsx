@@ -8,6 +8,7 @@ import {
   Route,
   Send,
   Sparkles,
+  Star,
   Utensils,
   X,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import {
   createGoogleMapsDirectionsUrl,
   createGoogleMapsSearchUrl,
   type MapAction,
+  type PlaceCard,
 } from '../../utils/googleMaps';
 
 type MessageRole = 'user' | 'assistant';
@@ -25,12 +27,14 @@ interface ChatMessage {
   role: MessageRole;
   text: string;
   mapActions?: MapAction[];
+  placeCards?: PlaceCard[];
   livePlaces?: boolean;
 }
 
 interface ApiResponse {
   reply?: string;
   mapActions?: MapAction[];
+  placeCards?: PlaceCard[];
   livePlaces?: boolean;
   error?: string;
 }
@@ -59,6 +63,17 @@ function isMapAction(value: unknown): value is MapAction {
   return typeof action.label === 'string' && typeof action.url === 'string';
 }
 
+function isPlaceCard(value: unknown): value is PlaceCard {
+  if (!value || typeof value !== 'object') return false;
+  const place = value as Partial<PlaceCard>;
+  return (
+    typeof place.id === 'string' &&
+    typeof place.name === 'string' &&
+    typeof place.googleMapsUrl === 'string' &&
+    typeof place.directionsUrl === 'string'
+  );
+}
+
 function parseStoredChats(value: unknown): Record<string, ChatMessage[]> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result: Record<string, ChatMessage[]> = {};
@@ -74,6 +89,7 @@ function parseStoredChats(value: unknown): Record<string, ChatMessage[]> {
           role: raw.role === 'user' ? 'user' : 'assistant',
           text: typeof raw.text === 'string' ? raw.text : '',
           mapActions: Array.isArray(raw.mapActions) ? raw.mapActions.filter(isMapAction) : undefined,
+          placeCards: Array.isArray(raw.placeCards) ? raw.placeCards.filter(isPlaceCard) : undefined,
           livePlaces: typeof raw.livePlaces === 'boolean' ? raw.livePlaces : undefined,
         } satisfies ChatMessage;
       })
@@ -283,6 +299,7 @@ export function TravelAiAssistant({
           payload.error ??
           'Mình chưa trả lời được lúc này. Bạn vẫn có thể mở Google Maps bằng nút bên dưới.',
         mapActions: payload.mapActions?.length ? payload.mapActions : fallbackActions,
+        placeCards: payload.placeCards?.filter(isPlaceCard),
         livePlaces: payload.livePlaces,
       };
 
@@ -383,6 +400,64 @@ export function TravelAiAssistant({
                   >
                     {message.text}
                   </div>
+
+                  {message.role === 'assistant' && message.placeCards?.length ? (
+                    <div className="mt-2 space-y-2">
+                      {message.placeCards.map((place) => (
+                        <div
+                          key={`${message.id}-${place.id}`}
+                          className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-950">{place.name}</p>
+                              {place.address ? (
+                                <p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-gray-500">
+                                  <MapPinned className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                  <span>{place.address}</span>
+                                </p>
+                              ) : null}
+                            </div>
+
+                            {typeof place.rating === 'number' ? (
+                              <div className="flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+                                <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                                {place.rating.toFixed(1)}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {typeof place.userRatingCount === 'number' && place.userRatingCount > 0 ? (
+                            <p className="mt-1.5 text-[11px] text-gray-400">
+                              {place.userRatingCount.toLocaleString('vi-VN')} lượt đánh giá trên Google
+                            </p>
+                          ) : null}
+
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <a
+                              href={place.googleMapsUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs font-semibold text-gray-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                            >
+                              <MapPinned className="h-3.5 w-3.5" aria-hidden="true" />
+                              Xem Maps
+                              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                            </a>
+                            <a
+                              href={place.directionsUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gray-950 px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-gray-800"
+                            >
+                              <Route className="h-3.5 w-3.5" aria-hidden="true" />
+                              Chỉ đường
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
 
                   {message.role === 'assistant' && message.mapActions?.length ? (
                     <div className="mt-2 flex flex-wrap gap-2">

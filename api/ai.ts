@@ -4,6 +4,7 @@ import {
   createGoogleMapsDirectionsUrl,
   createGoogleMapsSearchUrl,
   type MapAction,
+  type PlaceCard,
 } from '../src/utils/googleMaps.js';
 
 interface HistoryItem {
@@ -88,7 +89,7 @@ function mentionsAnotherProvince(message: string, selectedProvinceId: string) {
 function inferIntent(message: string) {
   const value = normalize(message);
   return {
-    food: /(quan an|nha hang|am thuc|mon an|an gi|do an|food|restaurant)/.test(value),
+    food: /(quan an|nha hang|am thuc|mon an|an gi|do an|food|restaurant|pho|bun|com|banh|lau|nem|cha|hai san|ca phe|cafe|an sang|an trua|an toi)/.test(value),
     places: /(dia diem|tham quan|di dau|du lich|check in|checkin|lich trinh|vui choi|dang den)/.test(
       value,
     ),
@@ -168,8 +169,14 @@ async function getLivePlaces(message: string, provinceName: string) {
   const intent = inferIntent(message);
   const queries: string[] = [];
 
-  if (intent.food || intent.itinerary) queries.push(`quán ăn ngon tại ${provinceName}`);
-  if (intent.places || intent.itinerary) queries.push(`địa điểm du lịch nổi bật tại ${provinceName}`);
+  if (intent.itinerary) {
+    queries.push(`địa điểm du lịch nổi bật tại ${provinceName}`);
+    queries.push(`quán ăn ngon tại ${provinceName}`);
+  } else if (intent.food) {
+    queries.push(`${message} tại ${provinceName}`);
+  } else if (intent.places) {
+    queries.push(`${message} tại ${provinceName}`);
+  }
 
   if (!queries.length) return [];
 
@@ -197,14 +204,26 @@ function livePlacesAsContext(places: GooglePlace[]) {
     .join('\n');
 }
 
-function placeActions(places: GooglePlace[]): MapAction[] {
+function placeCards(places: GooglePlace[]): PlaceCard[] {
   return places
-    .filter((place) => place.googleMapsUri && place.displayName?.text)
-    .slice(0, 3)
-    .map((place) => ({
-      label: place.displayName!.text!,
-      url: place.googleMapsUri!,
-    }));
+    .filter((place) => place.displayName?.text)
+    .slice(0, 5)
+    .map((place) => {
+      const name = place.displayName!.text!;
+      const address = place.formattedAddress?.trim() || undefined;
+      const destination = address ? `${name}, ${address}` : name;
+
+      return {
+        id: place.id ?? `${name}-${address ?? ''}`,
+        name,
+        address,
+        rating: place.rating,
+        userRatingCount: place.userRatingCount,
+        googleMapsUrl:
+          place.googleMapsUri ?? createGoogleMapsSearchUrl(destination, place.id),
+        directionsUrl: createGoogleMapsDirectionsUrl(destination, place.id),
+      };
+    });
 }
 
 function sleep(ms: number) {
@@ -315,14 +334,13 @@ export default {
         reply: `Cuộc chat này đang khóa theo ${provinceName}, nên mình chỉ trả lời nội dung thuộc ${provinceName}. Bạn hãy chọn tỉnh khác trên bản đồ nếu muốn hỏi về nơi đó.`,
         mapActions: baseActions,
         livePlaces: false,
+        placeCards: [],
       });
     }
 
     const livePlaces = await getLivePlaces(message, provinceName);
-    const liveActions = placeActions(livePlaces);
-    const mapActions = [...liveActions, ...baseActions]
-      .filter((item, index, all) => all.findIndex((other) => other.url === item.url) === index)
-      .slice(0, 4);
+    const cards = placeCards(livePlaces);
+    const mapActions = baseActions;
 
     const localPlaces = current.data.places
       .slice(0, 8)
@@ -338,7 +356,7 @@ export default {
       .map((item) => `${item.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${item.text.slice(0, 900)}`)
       .join('\n');
 
-    const prompt = `Bạn là trợ lý du lịch bên trong website Vietnam Travel.\n\nQUY TẮC CỨNG:\n1. Tỉnh đang chọn là: ${provinceName} (id: ${provinceId}). Chỉ trả lời về địa điểm, ẩm thực, lịch trình, cách di chuyển và thông tin du lịch thuộc tỉnh/thành này.\n2. Không chuyển sang tư vấn tỉnh/thành khác dù người dùng yêu cầu. Nếu câu hỏi nằm ngoài phạm vi, nhắc họ đổi tỉnh trên bản đồ.\n3. Trả lời bằng tiếng Việt, tự nhiên, gọn, dễ đọc. Ưu tiên gợi ý thực tế theo buổi sáng/trưa/chiều/tối khi lập lịch trình.\n4. Không bịa giờ mở cửa, giá vé, khoảng cách, rating hay trạng thái hoạt động. Chỉ dùng rating/địa chỉ khi chúng xuất hiện trong dữ liệu Google Places bên dưới.\n5. Khi tư vấn đường đi, mô tả hướng di chuyển ở mức tổng quát và nhắc người dùng dùng nút Google Maps để có chỉ dẫn thời gian thực.\n6. Nếu dữ liệu dự án và Google Places khác nhau, ưu tiên Google Places cho quán/địa điểm đang hoạt động nhưng vẫn nói theo hướng tham khảo.\n\nDỮ LIỆU NỘI BỘ VỀ ${provinceName}:\n${current.data.overview.description}\n\nĐịa điểm trong dự án:\n${localPlaces || '- Chưa có dữ liệu.'}\n\nẨm thực trong dự án:\n${localCuisine || '- Chưa có dữ liệu.'}\n\nDỮ LIỆU GOOGLE PLACES TRỰC TIẾP (nếu có):\n${livePlacesAsContext(livePlaces)}\n\nLỊCH SỬ CHAT GẦN NHẤT:\n${history || '(chưa có)'}\n\nCÂU HỎI HIỆN TẠI:\n${message}\n\nHãy trả lời tối đa khoảng 350 từ. Không dùng markdown table.`;
+    const prompt = `Bạn là trợ lý du lịch bên trong website Vietnam Travel.\n\nQUY TẮC CỨNG:\n1. Tỉnh đang chọn là: ${provinceName} (id: ${provinceId}). Chỉ trả lời về địa điểm, ẩm thực, lịch trình, cách di chuyển và thông tin du lịch thuộc tỉnh/thành này.\n2. Không chuyển sang tư vấn tỉnh/thành khác dù người dùng yêu cầu. Nếu câu hỏi nằm ngoài phạm vi, nhắc họ đổi tỉnh trên bản đồ.\n3. Trả lời bằng tiếng Việt, tự nhiên, gọn, dễ đọc. Ưu tiên gợi ý thực tế theo buổi sáng/trưa/chiều/tối khi lập lịch trình.\n4. Không bịa giờ mở cửa, giá vé, khoảng cách, rating hay trạng thái hoạt động. Chỉ dùng rating/địa chỉ khi chúng xuất hiện trong dữ liệu Google Places bên dưới.\n5. Khi tư vấn đường đi, mô tả hướng di chuyển ở mức tổng quát và nhắc người dùng dùng nút Google Maps để có chỉ dẫn thời gian thực.\n6. Nếu dữ liệu dự án và Google Places khác nhau, ưu tiên Google Places cho quán/địa điểm đang hoạt động nhưng vẫn nói theo hướng tham khảo.\n7. Nếu người dùng hỏi quán ăn, món ăn, cà phê hoặc địa điểm cụ thể và có dữ liệu Google Places, chỉ gợi ý tên quán/địa điểm có trong danh sách Google Places. Không tự bịa thêm cơ sở hay địa chỉ. Card chi tiết và nút Google Maps sẽ được giao diện hiển thị bên dưới câu trả lời, nên phần trả lời chỉ cần giải thích ngắn gọn vì sao đáng thử/đáng đến.\n\nDỮ LIỆU NỘI BỘ VỀ ${provinceName}:\n${current.data.overview.description}\n\nĐịa điểm trong dự án:\n${localPlaces || '- Chưa có dữ liệu.'}\n\nẨm thực trong dự án:\n${localCuisine || '- Chưa có dữ liệu.'}\n\nDỮ LIỆU GOOGLE PLACES TRỰC TIẾP (nếu có):\n${livePlacesAsContext(livePlaces)}\n\nLỊCH SỬ CHAT GẦN NHẤT:\n${history || '(chưa có)'}\n\nCÂU HỎI HIỆN TẠI:\n${message}\n\nHãy trả lời tối đa khoảng 350 từ. Không dùng markdown table.`;
 
     const reply = await askGemini(prompt);
 
@@ -349,6 +367,7 @@ export default {
             'Trợ lý AI đang bận hoặc tạm lỗi. Bạn thử gửi lại sau một chút nha. Các nút Google Maps bên dưới vẫn hoạt động bình thường.',
           mapActions,
           livePlaces: livePlaces.length > 0,
+          placeCards: cards,
         },
         { status: process.env.GEMINI_API_KEY ? 502 : 503 },
       );
@@ -358,6 +377,7 @@ export default {
       reply,
       mapActions,
       livePlaces: livePlaces.length > 0,
+      placeCards: cards,
     });
   },
 };

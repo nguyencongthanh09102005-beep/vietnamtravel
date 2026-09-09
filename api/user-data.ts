@@ -3,7 +3,7 @@ import {
   getRequestAuthSession,
   getSupabaseConfig,
   supabaseRestFetch,
-} from './_lib/supabase';
+} from './_lib/supabase.js';
 
 interface StoredTravelData {
   user_id: string;

@@ -1,10 +1,10 @@
-import { provinceDetailsCatalog } from '../src/data/provinceDetailsData';
-import { provincesData } from '../src/data/provincesData';
+import { provinceDetailsCatalog } from '../src/data/provinceDetailsData.js';
+import { provincesData } from '../src/data/provincesData.js';
 import {
   createGoogleMapsDirectionsUrl,
   createGoogleMapsSearchUrl,
   type MapAction,
-} from '../src/utils/googleMaps';
+} from '../src/utils/googleMaps.js';
 
 interface HistoryItem {
   role: 'user' | 'assistant';
@@ -24,6 +24,12 @@ interface GooglePlace {
   rating?: number;
   userRatingCount?: number;
   googleMapsUri?: string;
+}
+
+interface GeminiPayload {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
 }
 
 function json(data: unknown, init: ResponseInit = {}) {
@@ -201,43 +207,83 @@ function placeActions(places: GooglePlace[]): MapAction[] {
     }));
 }
 
-async function askGemini(prompt: string) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  const model = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      }),
-    },
-  );
+function isTransientGeminiStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Gemini API error:', response.status, errorText.slice(0, 500));
-    return null;
-  }
-
-  const payload = (await response.json()) as {
-    candidates?: Array<{
-      content?: { parts?: Array<{ text?: string }> };
-    }>;
-  };
-
+function geminiText(payload: GeminiPayload) {
   return (
     payload.candidates?.[0]?.content?.parts
       ?.map((part) => part.text ?? '')
       .join('')
       .trim() || null
   );
+}
+
+async function askGeminiWithModel(prompt: string, apiKey: string, model: string) {
+  const maxAttempts = 2;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          }),
+        },
+      );
+
+      if (response.ok) {
+        return geminiText((await response.json()) as GeminiPayload);
+      }
+
+      const errorText = await response.text();
+      console.error(
+        `Gemini API error (${model}, attempt ${attempt + 1}/${maxAttempts}):`,
+        response.status,
+        errorText.slice(0, 500),
+      );
+
+      if (!isTransientGeminiStatus(response.status) || attempt === maxAttempts - 1) {
+        return null;
+      }
+    } catch (error) {
+      console.error(`Gemini network error (${model}, attempt ${attempt + 1}/${maxAttempts}):`, error);
+      if (attempt === maxAttempts - 1) return null;
+    }
+
+    const delayMs = 700 * 2 ** attempt + Math.floor(Math.random() * 250);
+    await sleep(delayMs);
+  }
+
+  return null;
+}
+
+async function askGemini(prompt: string) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
+  const fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.6-flash';
+  const models = [...new Set([primaryModel, fallbackModel, 'gemini-2.5-flash'])];
+
+  for (const model of models) {
+    const reply = await askGeminiWithModel(prompt, apiKey, model);
+    if (reply) return reply;
+    console.warn(`Gemini model ${model} failed; trying the next fallback model.`);
+  }
+
+  return null;
 }
 
 export default {
@@ -300,7 +346,7 @@ export default {
       return json(
         {
           reply:
-            'Trợ lý AI chưa được cấu hình hoặc đang tạm lỗi trên bản deploy này. Các nút Google Maps bên dưới vẫn hoạt động bình thường.',
+            'Trợ lý AI đang bận hoặc tạm lỗi. Bạn thử gửi lại sau một chút nha. Các nút Google Maps bên dưới vẫn hoạt động bình thường.',
           mapActions,
           livePlaces: livePlaces.length > 0,
         },

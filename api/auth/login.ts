@@ -4,7 +4,7 @@ import {
   getSupabaseConfig,
   supabaseAuthFetch,
   toPublicUser,
-} from '../_lib/supabase';
+} from '../_lib/supabase.js';
 
 interface LoginBody {
   email?: string;

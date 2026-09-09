@@ -273,9 +273,9 @@ async function askGemini(prompt: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
   const fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.6-flash';
-  const models = [...new Set([primaryModel, fallbackModel, 'gemini-2.5-flash'])];
+  const models = [...new Set([primaryModel, fallbackModel, 'gemini-3.5-flash'])];
 
   for (const model of models) {
     const reply = await askGeminiWithModel(prompt, apiKey, model);

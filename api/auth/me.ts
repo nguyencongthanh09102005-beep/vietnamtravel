@@ -3,7 +3,7 @@ import {
   clearAuthCookies,
   getRequestAuthSession,
   getSupabaseConfig,
-} from '../_lib/supabase';
+} from '../_lib/supabase.js';
 
 function json(data: unknown, status = 200, cookies: string[] = []) {
   const headers = new Headers({ 'Cache-Control': 'no-store' });

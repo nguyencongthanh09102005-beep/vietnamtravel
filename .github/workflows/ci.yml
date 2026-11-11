@@ -47,5 +47,8 @@ jobs:
       - name: API behavior tests
         run: npm run test:api
 
+      - name: Local API middleware integration tests
+        run: node --test scripts/local-api.test.mjs
+
       - name: Build production bundle
         run: npm run build

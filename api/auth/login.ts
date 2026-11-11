@@ -51,21 +51,26 @@ export default {
     const password = body.password ?? '';
     if (!email || !password) return json({ error: 'Hãy nhập email và mật khẩu.' }, 400);
 
-    const response = await supabaseAuthFetch('/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    const payload = (await response.json()) as LoginPayload;
+    try {
+      const response = await supabaseAuthFetch('/auth/v1/token?grant_type=password', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      const payload = (await response.json()) as LoginPayload;
 
-    if (!response.ok || !payload.user || !payload.access_token || !payload.refresh_token) {
-      const message = payload.error_description || payload.msg || 'Email hoặc mật khẩu chưa đúng.';
-      return json({ error: message }, response.status >= 400 ? response.status : 401);
+      if (!response.ok || !payload.user || !payload.access_token || !payload.refresh_token) {
+        const message = payload.error_description || payload.msg || 'Email hoặc mật khẩu chưa đúng.';
+        return json({ error: message }, response.status >= 400 ? response.status : 401);
+      }
+
+      return json(
+        { user: toPublicUser(payload.user) },
+        200,
+        authCookies(payload),
+      );
+    } catch (error) {
+      console.error('Supabase login connection failed:', error);
+      return json({ error: 'Không kết nối được Supabase. Hãy kiểm tra URL dự án và mạng rồi thử lại.' }, 502);
     }
-
-    return json(
-      { user: toPublicUser(payload.user) },
-      200,
-      authCookies(payload),
-    );
   },
 };

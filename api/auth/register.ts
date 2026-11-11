@@ -58,31 +58,36 @@ export default {
       return json({ error: 'Mật khẩu cần ít nhất 8 ký tự.' }, 400);
     }
 
-    const response = await supabaseAuthFetch('/auth/v1/signup', {
-      method: 'POST',
-      body: JSON.stringify({
-        email,
-        password,
-        data: { full_name: displayName },
-      }),
-    });
-    const payload = (await response.json()) as RegisterPayload;
+    try {
+      const response = await supabaseAuthFetch('/auth/v1/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          data: { full_name: displayName },
+        }),
+      });
+      const payload = (await response.json()) as RegisterPayload;
 
-    if (!response.ok || !payload.user) {
-      return json(
-        { error: payload.error_description || payload.msg || 'Không thể tạo tài khoản.' },
-        response.status >= 400 ? response.status : 400,
-      );
+      if (!response.ok || !payload.user) {
+        return json(
+          { error: payload.error_description || payload.msg || 'Không thể tạo tài khoản.' },
+          response.status >= 400 ? response.status : 400,
+        );
+      }
+
+      if (payload.access_token && payload.refresh_token) {
+        return json(
+          { user: toPublicUser(payload.user), needsEmailConfirmation: false },
+          200,
+          authCookies(payload),
+        );
+      }
+
+      return json({ user: null, needsEmailConfirmation: true });
+    } catch (error) {
+      console.error('Supabase registration connection failed:', error);
+      return json({ error: 'Không kết nối được Supabase. Hãy kiểm tra URL dự án và mạng rồi thử lại.' }, 502);
     }
-
-    if (payload.access_token && payload.refresh_token) {
-      return json(
-        { user: toPublicUser(payload.user), needsEmailConfirmation: false },
-        200,
-        authCookies(payload),
-      );
-    }
-
-    return json({ user: null, needsEmailConfirmation: true });
   },
 };

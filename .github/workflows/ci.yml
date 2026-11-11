@@ -38,5 +38,11 @@ jobs:
       - name: Typecheck API functions
         run: npm run typecheck:api
 
+      - name: Validate referenced local images
+        run: node scripts/check-assets.mjs
+
+      - name: Repository content tests
+        run: node --test scripts/*.test.mjs
+
       - name: Build production bundle
         run: npm run build

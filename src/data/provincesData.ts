@@ -12,7 +12,7 @@ export const provincesData = {
   'Lang Son': { name: 'Tỉnh Lạng Sơn', banner: '/banner/langson.jpg' },
   'Phu Tho': { name: 'Tỉnh Phú Thọ', banner: '/banner/phutho.jpg' },
   'Bac Ninh': { name: 'Tỉnh Bắc Ninh', banner: '/banner/bacninh.jpg' },
-  'Quang Ninh': { name: 'Tỉnh Quảng Ninh', banner: '/banner/quangninh.jpg' },
+  'Quang Ninh': { name: 'Tỉnh Quảng Ninh', banner: '/banner/ha long.jpg' },
   'Hai Phong': { name: 'TP. Hải Phòng', banner: '/banner/haiphong.jpg' },
   'Hung Yen': { name: 'Tỉnh Hưng Yên', banner: '/banner/hungyen.jpg' },
   'Ninh Binh': { name: 'Tỉnh Ninh Bình', banner: '/banner/ninhbinh.jpg' },

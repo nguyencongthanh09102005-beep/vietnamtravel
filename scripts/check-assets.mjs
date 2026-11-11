@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const candidates = [
+  'src/data/provincesData.ts',
   'src/data/provinceDetailsData.ts',
   'src/app/components/ProvinceDetails.tsx',
   'src/app/App.tsx',

@@ -5,8 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'vite';
 
-const oldUrl = process.env.SUPABASE_URL;
-const oldKey = process.env.SUPABASE_ANON_KEY;
 // Always isolate integration test data from the user's real SQLite database.
 const tempFolder = mkdtempSync(join(tmpdir(), 'vietnamtravel-db-test-'));
 process.env.LOCAL_DB_PATH = join(tempFolder, 'data.sqlite');
@@ -24,10 +22,6 @@ const base = 'http://127.0.0.1:' + addr.port;
 
 after(async () => {
   await server.close();
-  if (oldUrl === undefined) delete process.env.SUPABASE_URL;
-  else process.env.SUPABASE_URL = oldUrl;
-  if (oldKey === undefined) delete process.env.SUPABASE_ANON_KEY;
-  else process.env.SUPABASE_ANON_KEY = oldKey;
   rmSync(tempFolder, { recursive: true, force: true });
 });
 

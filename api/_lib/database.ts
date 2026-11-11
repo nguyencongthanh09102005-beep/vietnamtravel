@@ -28,6 +28,22 @@ const schema = [
     scope TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires_at INTEGER NOT NULL
   )`,
   'CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)',
+  `CREATE TABLE IF NOT EXISTS travel_plans (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    province_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    days INTEGER NOT NULL CHECK(days BETWEEN 1 AND 14),
+    party_size INTEGER NOT NULL CHECK(party_size BETWEEN 1 AND 20),
+    budget_vnd INTEGER NOT NULL CHECK(budget_vnd > 0),
+    travel_style TEXT NOT NULL,
+    plan_json TEXT NOT NULL CHECK(json_valid(plan_json)),
+    revision INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+  'CREATE INDEX IF NOT EXISTS travel_plans_user_idx ON travel_plans(user_id,updated_at DESC)',
 ];
 
 const hosted = () => Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production';

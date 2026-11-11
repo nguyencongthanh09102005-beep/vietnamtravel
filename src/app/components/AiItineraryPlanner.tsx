@@ -20,6 +20,7 @@ interface Props {
   open: boolean;
   provinceId: string;
   authenticated: boolean;
+  requestedSavedPlan: SavedItinerary | null;
   onClose: () => void;
 }
 
@@ -61,7 +62,7 @@ function Label({ children }: { children: ReactNode }) {
   return <span className="mb-1 block text-xs font-semibold text-slate-700">{children}</span>;
 }
 
-export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }: Props) {
+export function AiItineraryPlanner({ open, provinceId, authenticated, requestedSavedPlan, onClose }: Props) {
   const dialog = useRef<HTMLElement>(null);
   const dirtyRef = useRef(false);
   const busyRef = useRef(false);
@@ -127,6 +128,22 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
     if (!open || !authenticated) return;
     void refreshSaved();
   }, [open, authenticated]);
+
+  useEffect(() => {
+    if (!open || !authenticated || !requestedSavedPlan) return;
+    // Opening from "Hành trình của tôi" should land on this exact saved plan.
+    // The list in the planner continues to refresh through /api/itineraries.
+    if (dirtyRef.current && !window.confirm('Bỏ thay đổi chưa lưu để mở lịch trình khác?')) return;
+    setPlan(recalculatePlan(requestedSavedPlan.plan));
+    setForm({ ...requestedSavedPlan.plan });
+    setSavedId(requestedSavedPlan.id);
+    setRevision(requestedSavedPlan.revision);
+    setSelectedDay(1);
+    setEditingStop(null);
+    setDirty(false);
+    setError('');
+    setNotice('Đang xem lịch trình AI đã lưu.');
+  }, [open, authenticated, requestedSavedPlan]);
 
   async function refreshSaved() {
     setListLoading(true);

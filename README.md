@@ -92,9 +92,17 @@ src/
 Yêu cầu Node.js phiên bản LTS hiện hành.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
+
+Mở URL Vite hiển thị (mặc định `http://localhost:5173`). **Chỉ cần `npm run dev` để chạy đồng thời giao diện và các API `/api/*` trên máy**: không phải đăng nhập, liên kết hoặc chạy Vercel CLI. Các API production trên Vercel vẫn được giữ nguyên.
+
+Điền `.env` theo `.env.example` (không commit `.env`); Vite chỉ nạp các biến bí mật vào **process Node server**, không đưa chúng sang trình duyệt. Khi thay đổi .env, khởi động lại lệnh dev.
+
+**Supabase vẫn là dịch vụ bên ngoài.** Nếu đăng nhập báo `ENOTFOUND`, kiểm tra Project URL trên Supabase Dashboard và DNS/mạng; đổi lệnh chạy web không thể biến một URL không tồn tại thành URL hợp lệ.
+
+Nên dùng `npx vercel dev` chỉ khi cần đối chiếu môi trường Vercel, không bắt buộc trong phát triển thường ngày.
 
 Kiểm tra TypeScript và build production:
 

@@ -9,7 +9,7 @@
     "typecheck:api": "tsc --noEmit -p tsconfig.api.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test:api": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node --test scripts/api-smoke.test.mjs scripts/remote-db.test.mjs"
+    "test:api": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node --test scripts/api-smoke.test.mjs scripts/remote-db.test.mjs scripts/itinerary.test.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.39.0",

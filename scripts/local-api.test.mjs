@@ -108,3 +108,134 @@ test('register/login/profile/travel CRUD/logout all work with local SQLite', asy
   const afterLogout = await fetch(base + '/api/auth/me', { headers: { cookie } });
   assert.equal((await afterLogout.json()).user, null);
 });
+
+
+test('AI planner generates, saves, edits, regenerates a day, and enforces user isolation', async () => {
+  const previousKey = process.env.GEMINI_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.GEMINI_API_KEY = 'fake-test-key-only';
+  let secondDay = false;
+  const generated = () => ({
+    title: 'Đà Nẵng 3 ngày khám phá ẩm thực',
+    warnings: ['Chi phí chỉ là ước tính.'],
+    schedule: [1,2,3].map(day => ({
+      day,
+      stops: [
+        {
+          id: 'd' + day + 's1', period: 'morning', startTime: '08:00',
+          title: day === 2 && secondDay ? 'Bánh canh' : 'Mì Quảng',
+          description: 'Đặc sản địa phương',
+          estimatedCostVnd: 140000, category: 'food', source: 'ai_suggestion',
+        },
+        {
+          id: 'd' + day + 's2', period: 'noon', startTime: '12:00',
+          title: 'Bánh tráng cuốn thịt heo', description: 'Món địa phương',
+          estimatedCostVnd: 180000, category: 'food', source: 'ai_suggestion',
+        },
+      ],
+    })),
+  });
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes('generativelanguage.googleapis.com')) {
+      assert.equal(new Headers(options.headers).get('x-goog-api-key'), 'fake-test-key-only');
+      return Response.json({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(generated()) }] } }],
+      });
+    }
+    return originalFetch(url, options);
+  };
+
+  const send = (route, method, payload, cookie) => fetch(base + route, {
+    method,
+    headers: {
+      'content-type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+    },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+  const trip = {
+    provinceId: 'Da Nang', days: 3, partySize: 2, totalBudgetVnd: 3000000,
+    style: 'food', startDate: null, includeArrivalTransport: false,
+    preferences: { preferAffordablePlaces: true, minimizeTravel: true, notes: '' },
+  };
+  try {
+    const bad = await send('/api/itineraries/generate', 'POST', { ...trip, days: 24 });
+    assert.equal(bad.status, 400);
+
+    const response = await send('/api/itineraries/generate', 'POST', trip);
+    assert.equal(response.status, 200);
+    const output = await response.json();
+    assert.equal(output.plan.schedule.length, 3);
+    assert.equal(output.plan.budgetBreakdown.lodgingVnd, 900000);
+    assert.equal(output.plan.style, 'food');
+    assert.equal(output.plan.partySize, 2);
+
+    const anonymous = await fetch(base + '/api/itineraries');
+    assert.equal(anonymous.status, 401);
+
+    const registration = await send('/api/auth/register', 'POST', {
+      email: 'planner-a-' + Date.now() + '@example.test',
+      password: 'PlanTest123456!',
+      displayName: 'Planner User A',
+    });
+    assert.equal(registration.status, 200);
+    const cookie = registration.headers.get('set-cookie')?.split(';')[0];
+    assert.ok(cookie);
+
+    const saved = await send('/api/itineraries', 'POST', { plan: output.plan }, cookie);
+    assert.equal(saved.status, 201);
+    const item = (await saved.json()).item;
+    assert.equal(item.revision, 1);
+    assert.equal(item.plan.schedule.length, 3);
+
+    const list = await fetch(base + '/api/itineraries', { headers: { cookie } });
+    assert.equal(list.status, 200);
+    assert.equal((await list.json()).items.length, 1);
+
+    secondDay = true;
+    const replacement = await send('/api/itineraries/generate', 'POST', {
+      ...trip, regenerateDay: 2, currentPlan: output.plan,
+    });
+    assert.equal(replacement.status, 200);
+    const revised = (await replacement.json()).plan;
+    assert.equal(revised.schedule[0].stops[0].title, 'Mì Quảng');
+    assert.equal(revised.schedule[1].stops[0].title, 'Bánh canh');
+    assert.equal(revised.schedule[2].stops[0].title, 'Mì Quảng');
+
+    const patched = await send('/api/itineraries', 'PATCH', {
+      id: item.id, revision: 1, plan: revised,
+    }, cookie);
+    assert.equal(patched.status, 200);
+    assert.equal((await patched.json()).item.revision, 2);
+
+    const stale = await send('/api/itineraries', 'PATCH', {
+      id: item.id, revision: 1, plan: output.plan,
+    }, cookie);
+    assert.equal(stale.status, 409);
+
+    const secondUser = await send('/api/auth/register', 'POST', {
+      email: 'planner-b-' + Date.now() + '@example.test',
+      password: 'PlanTest123456!',
+      displayName: 'Planner User B',
+    });
+    assert.equal(secondUser.status, 200);
+    const cookieB = secondUser.headers.get('set-cookie')?.split(';')[0];
+    const otherList = await fetch(base + '/api/itineraries', { headers: { cookie: cookieB } });
+    assert.deepEqual((await otherList.json()).items, []);
+    const foreignDelete = await fetch(base + '/api/itineraries?id=' + item.id, {
+      method: 'DELETE', headers: { cookie: cookieB },
+    });
+    assert.equal(foreignDelete.status, 404);
+
+    const removed = await fetch(base + '/api/itineraries?id=' + item.id, {
+      method: 'DELETE', headers: { cookie },
+    });
+    assert.equal(removed.status, 200);
+    const empty = await fetch(base + '/api/itineraries', { headers: { cookie } });
+    assert.deepEqual((await empty.json()).items, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousKey;
+  }
+});

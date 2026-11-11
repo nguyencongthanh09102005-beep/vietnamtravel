@@ -88,3 +88,19 @@ Giá cả chỉ là **ước tính**, tuyệt đối không phải giá vé/phò
 - [ ] Test Turso thật qua Vercel Preview sau khi đã cấu hình secret.
 
 Không merge PR #5 trước khi PR #4 (SQLite/Turso) đã được duyệt/merge và kiểm tra đầy đủ.
+
+
+## Bản đồ lịch trình theo ngày (PR: daily map)
+
+- Mỗi tab **Ngày 1 / Ngày 2 / ...** có bản đồ OpenStreetMap với các ghim đánh số theo thứ tự hoạt động. Có phóng to, thu nhỏ, đặt lại khung nhìn và nhấn ghim để xác minh trên Google Maps.
+- **Chỉ đường Google Maps** dùng Directions URLs theo tên địa điểm; tự chia thành chặng tối đa 5 điểm, nối tiếp chặng trước. Không dùng Gemini để đoán khoảng cách, giờ chạy, tọa độ hoặc tình trạng giao thông.
+- `POST /api/itineraries/locations` nhận `{ provinceId, stops: [{ id, title, category }] }` tối đa 12 điểm mỗi ngày, trả `{ points: [{ id, lat, lon, label }], unlocatedIds, pending, retryAfterMs }`. Không cần API key Google Maps mới.
+- Định vị bằng Nominatim công khai **chỉ sau khi người dùng mở lịch trình/ngày**, không tìm kiếm gợi ý theo từng phím. API giới hạn tối đa một yêu cầu định vị mới trên toàn hệ thống mỗi 1,6 giây bằng khóa nguyên tử trong SQLite/Turso. Chỉ định vị tối đa một địa điểm chưa có cache mỗi lần, kết quả thành công lưu 60 ngày, không tìm được lưu 14 ngày.
+- Món ăn chung (ví dụ `Mì Quảng`), hoạt động chung và di chuyển không được coi là một địa điểm cụ thể. Nếu Nominatim không trả đúng tỉnh, **không tạo ghim**; thay vào đó giữ nút tìm Google Maps.
+- Nền bản đồ lấy tile từ OpenStreetMap theo khung nhìn thực tế, có attribution © OpenStreetMap contributors, không tải hàng loạt tile và tuân thủ cache của trình duyệt.
+- Đường nét đứt là **đoạn nối trực quan giữa ghim**, không phải đường đi thực tế. Người dùng cần kiểm tra lại địa điểm, tuyến và giờ mở cửa trong Google Maps.
+- Phần bản đồ được tách trong `src/app/components/ItineraryDayMap.tsx`; phần tính URL nằm trong `src/utils/itinerary-map.ts`. Không thay đổi schema JSON của lịch trình và không ghi tọa độ vào dữ liệu lịch trình AI.
+- Cách QA: Đà Nẵng 3 ngày, chọn Ngày 1 / Ngày 2 / Ngày 3; một ngày có `Cầu Rồng` và `Bà Nà Hills` sẽ thử định vị; món chung `Mì Quảng` không ghim bừa. Thử nút chỉ đường, chỉnh sửa tên địa điểm, đổi ngày, mở lịch trình đã lưu, màn hình nhỏ; thử mạng không có Nominatim để bảo đảm fallback.
+- Public Nominatim/tile service không có SLA và không phù hợp nếu ứng dụng đông người. Nếu tăng quy mô, chuyển nhà cung cấp bản đồ/định vị có hạn mức rõ ràng thay vì tăng tần suất gọi public API.
+
+Tham khảo chính sách: https://operations.osmfoundation.org/policies/nominatim/ và https://operations.osmfoundation.org/policies/tiles/

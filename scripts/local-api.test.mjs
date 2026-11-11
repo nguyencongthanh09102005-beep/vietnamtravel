@@ -247,3 +247,71 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     else process.env.GEMINI_API_KEY = previousKey;
   }
 });
+
+
+test('day map API geocodes a specific landmark once and reuses the SQLite cache', async () => {
+  const originalFetch = globalThis.fetch;
+  let externalCalls = 0;
+  globalThis.fetch = async (input, init) => {
+    if (String(input).startsWith('https://nominatim.openstreetmap.org/search?')) {
+      externalCalls++;
+      const search = new URL(String(input)).searchParams;
+      assert.equal(search.get('accept-language'), 'vi');
+      if (search.get('q')?.includes('Bà Nà Hills')) {
+        // Wrong-province result followed by a generic city center fallback:
+        // neither is a verified pin for this stop.
+        return Response.json([
+          { lat: '21.028', lon: '105.854', display_name: 'Bà Nà Hills, Hà Nội, Việt Nam',
+            address: { country_code: 'vn', city: 'Hà Nội' } },
+          { lat: '16.054', lon: '108.202', display_name: 'Đà Nẵng, Việt Nam', type: 'administrative',
+            address: { country_code: 'vn', city: 'Đà Nẵng' } },
+        ]);
+      }
+      return Response.json([{
+        lat: '16.061', lon: '108.227',
+        display_name: 'Cầu Rồng, Đà Nẵng, Việt Nam',
+        address: { country_code: 'vn', city: 'Đà Nẵng' },
+      }]);
+    }
+    return originalFetch(input, init);
+  };
+  const call = (stops) => fetch(base + '/api/itineraries/locations', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ provinceId: 'Da Nang', stops }),
+  });
+  try {
+    const invalid = await call([{ id: '../bad', title: 'Cầu Rồng', category: 'activities' }]);
+    assert.equal(invalid.status, 400);
+    const stop = { id: 'cau-rong', title: 'Cầu Rồng', category: 'activities' };
+    const fresh = await call([stop]);
+    assert.equal(fresh.status, 200);
+    const first = await fresh.json();
+    assert.equal(first.pending, false);
+    assert.equal(first.points.length, 1);
+    assert.equal(first.points[0].id, stop.id);
+    assert.equal(first.points[0].lat, 16.061);
+    const cached = await call([stop]);
+    assert.equal(cached.status, 200);
+    assert.equal((await cached.json()).points.length, 1);
+    assert.equal(externalCalls, 1, 'A cached location must not call the public geocoder twice');
+    const genericFood = await call([{ id: 'dish', title: 'Mì Quảng', category: 'food' }]);
+    assert.equal(genericFood.status, 200);
+    assert.deepEqual((await genericFood.json()).points, []);
+    assert.equal(externalCalls, 1, 'A generic dish is not a geographic location');
+
+    // The backend must not place a pin in another province or at a generic city center.
+    // Wait for the globally shared 1.6-second Nominatim throttle before the next lookup.
+    await new Promise(resolve => setTimeout(resolve, 1750));
+    const mismatch = { id: 'ba-na', title: 'Bà Nà Hills', category: 'activities' };
+    const unmatched = await call([mismatch]);
+    assert.equal(unmatched.status, 200);
+    assert.deepEqual((await unmatched.json()).points, []);
+    assert.equal(externalCalls, 2);
+    const cachedMiss = await call([mismatch]);
+    assert.equal(cachedMiss.status, 200);
+    assert.deepEqual((await cachedMiss.json()).points, []);
+    assert.equal(externalCalls, 2, 'A confirmed miss should be cached instead of repeatedly querying Nominatim');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -14,6 +14,7 @@ function localApi(): Plugin {
     '/api/ai': '/api/ai.ts',
     '/api/itineraries': '/api/itineraries.ts',
     '/api/itineraries/generate': '/api/itineraries/generate.ts',
+    '/api/itineraries/locations': '/api/itineraries/locations.ts',
     '/api/user-data': '/api/user-data.ts',
     '/api/auth/login': '/api/auth/login.ts',
     '/api/auth/register': '/api/auth/register.ts',

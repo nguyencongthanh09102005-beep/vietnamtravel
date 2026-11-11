@@ -61,6 +61,7 @@ export default {
       'Địa điểm được gợi ý trong dữ liệu nội bộ: ' + places.join(' | '),
       'Yêu cầu: schedule đúng ' + trip.days + ' ngày, mỗi ngày 2–5 hoạt động theo thời gian thực tế (morning/noon/afternoon/evening).',
       'Giữ các địa điểm cùng khu vực gần nhau nếu có thông tin; KHÔNG tuyên bố đã tính đường đi hoặc giờ mở cửa trực tiếp.',
+       'Để người dùng xem bản đồ: nếu phù hợp với lịch trình và ngân sách, mỗi ngày nên có ít nhất một địa danh tham quan có tên riêng từ danh sách nội bộ; không đổi tên món ăn thành địa chỉ/quán không xác thực.',
       'Không tự bịa địa chỉ nhà hàng, doanh nghiệp, đánh giá, giá vé thực hay tọa độ.',
       'Tên món ăn chung và địa danh trong danh mục nội bộ được chấp nhận. source="catalog" chỉ khi đã có trong dữ liệu nội bộ, còn lại="ai_suggestion".',
       'Chi phí estimatedCostVnd mỗi stop là ƯỚC TÍNH CHO CẢ NHÓM. ' +

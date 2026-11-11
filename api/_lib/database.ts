@@ -44,6 +44,10 @@ const schema = [
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
   )`,
   'CREATE INDEX IF NOT EXISTS travel_plans_user_idx ON travel_plans(user_id,updated_at DESC)',
+  `CREATE TABLE IF NOT EXISTS place_geocodes (
+    query_key TEXT PRIMARY KEY, lat REAL, lon REAL,
+    label TEXT NOT NULL, checked_at INTEGER NOT NULL
+  )`,
 ];
 
 const hosted = () => Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production';

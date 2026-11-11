@@ -196,9 +196,28 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     assert.equal(item.revision, 1);
     assert.equal(item.plan.schedule.length, 3);
 
+    // The "Hành trình của tôi" UI displays both data sources without moving
+    // or erasing legacy note itineraries from user_travel_data.
+    const noteItinerary = {
+      id: 'legacy-trip-note', provinceId: 'Da Nang', title: 'Ghi chú Đà Nẵng',
+      notes: 'Một lịch trình ghi chú cũ', createdAt: new Date().toISOString(),
+    };
+    const savedNotes = await send('/api/user-data', 'PATCH', {
+      itineraries: [noteItinerary],
+    }, cookie);
+    assert.equal(savedNotes.status, 200);
+    assert.equal((await savedNotes.json()).data.itineraries.length, 1);
+
     const list = await fetch(base + '/api/itineraries', { headers: { cookie } });
     assert.equal(list.status, 200);
-    assert.equal((await list.json()).items.length, 1);
+    const structuredPlans = (await list.json()).items;
+    assert.equal(structuredPlans.length, 1);
+    assert.equal(structuredPlans[0].id, item.id);
+    assert.equal(structuredPlans[0].plan.title, output.plan.title);
+
+    const legacyList = await fetch(base + '/api/user-data', { headers: { cookie } });
+    assert.equal(legacyList.status, 200);
+    assert.equal((await legacyList.json()).data.itineraries[0].id, noteItinerary.id);
 
     secondDay = true;
     const replacement = await send('/api/itineraries/generate', 'POST', {
@@ -241,6 +260,12 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     assert.equal(removed.status, 200);
     const empty = await fetch(base + '/api/itineraries', { headers: { cookie } });
     assert.deepEqual((await empty.json()).items, []);
+    const notesStillSaved = await fetch(base + '/api/user-data', { headers: { cookie } });
+    assert.equal(notesStillSaved.status, 200);
+    assert.equal((await notesStillSaved.json()).data.itineraries[0].id, noteItinerary.id);
+    const notesOtherAccount = await fetch(base + '/api/user-data', { headers: { cookie: cookieB } });
+    assert.equal(notesOtherAccount.status, 200);
+    assert.deepEqual((await notesOtherAccount.json()).data.itineraries, []);
   } finally {
     globalThis.fetch = originalFetch;
     if (previousKey === undefined) delete process.env.GEMINI_API_KEY;

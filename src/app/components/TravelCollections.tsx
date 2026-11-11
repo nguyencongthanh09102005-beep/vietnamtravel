@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bookmark, CheckCircle2, LoaderCircle, MapPin, Pencil, Trash2, X } from 'lucide-react';
+import { Bookmark, CheckCircle2, LoaderCircle, MapPin, Pencil, Sparkles, Trash2, X } from 'lucide-react';
 import { provincesData, type ProvinceId } from '../../data/provincesData';
+import type { SavedItinerary } from '../../utils/itinerary';
 
 export interface TripPlan {
   id: string;
@@ -23,6 +24,7 @@ interface Props {
   onSelectProvince: (id: string) => void;
   draftItinerary: { provinceId: string; notes: string } | null;
   onDraftConsumed: () => void;
+  onOpenAiItinerary: (item: SavedItinerary) => void;
 }
 
 const blank: TravelData = { savedProvinces: [], visitedProvinces: [], itineraries: [] };
@@ -41,9 +43,12 @@ function parseData(raw: unknown): TravelData {
   };
 }
 
-export function TravelCollections({ open, selectedProvince, onClose, onSelectProvince, draftItinerary, onDraftConsumed }: Props) {
+export function TravelCollections({ open, selectedProvince, onClose, onSelectProvince, draftItinerary, onDraftConsumed, onOpenAiItinerary }: Props) {
   const dialogRef = useRef<HTMLElement>(null);
   const [data, setData] = useState<TravelData>(blank);
+  const [aiPlans, setAiPlans] = useState<SavedItinerary[]>([]);
+  const [aiPlansError, setAiPlansError] = useState('');
+  const [aiPlansLoading, setAiPlansLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -61,19 +66,42 @@ export function TravelCollections({ open, selectedProvince, onClose, onSelectPro
     setLoading(true);
     setReady(false);
     setError('');
+    setAiPlans([]);
+    setAiPlansError('');
+    setAiPlansLoading(true);
     void (async () => {
-      try {
-        const response = await fetch('/api/user-data', { cache: 'no-store' });
-        if (!response.ok) throw new Error('Cloud unavailable');
-        const payload = (await response.json()) as { data?: unknown };
-        if (!active) return;
-        setData(parseData(payload.data));
+      // The personal notes and the structured AI itineraries live in separate
+      // tables. Load both when opening Collections, without copying or migrating
+      // user data or making one failed request hide the other.
+      const [notesResult, aiResult] = await Promise.allSettled([
+        (async () => {
+          const response = await fetch('/api/user-data', { cache: 'no-store' });
+          if (!response.ok) throw new Error('Cannot load account data');
+          const payload = await response.json() as { data?: unknown };
+          return parseData(payload.data);
+        })(),
+        (async () => {
+          const response = await fetch('/api/itineraries', { cache: 'no-store' });
+          if (!response.ok) throw new Error('Cannot load AI plans');
+          const payload = await response.json() as { items?: SavedItinerary[] };
+          if (!Array.isArray(payload.items)) throw new Error('Invalid AI plan list');
+          return payload.items;
+        })(),
+      ]);
+      if (!active) return;
+      if (notesResult.status === 'fulfilled') {
+        setData(notesResult.value);
         setReady(true);
-      } catch {
-        if (active) setError('Không tải được dữ liệu tài khoản. Hãy thử lại trước khi thay đổi.');
-      } finally {
-        if (active) setLoading(false);
+      } else {
+        setError('Không tải được dữ liệu tài khoản. Hãy thử lại trước khi thay đổi.');
       }
+      if (aiResult.status === 'fulfilled') {
+        setAiPlans(aiResult.value);
+      } else {
+        setAiPlansError('Chưa tải được lịch trình AI. Hãy thử tải lại.');
+      }
+      setLoading(false);
+      setAiPlansLoading(false);
     })();
     return () => { active = false; };
   }, [open, reload]);
@@ -183,7 +211,7 @@ export function TravelCollections({ open, selectedProvince, onClose, onSelectPro
         </header>
         <nav aria-label="Mục hành trình" className="flex border-b border-gray-100 px-4">
           <button type="button" aria-pressed={tab === 'provinces'} onClick={() => setTab('provinces')} className={'px-4 py-3 text-sm font-semibold ' + (tab === 'provinces' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500')}>Tỉnh đã lưu / đã đi</button>
-          <button type="button" aria-pressed={tab === 'plans'} onClick={() => setTab('plans')} className={'px-4 py-3 text-sm font-semibold ' + (tab === 'plans' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500')}>Lịch trình ({data.itineraries.length})</button>
+          <button type="button" aria-pressed={tab === 'plans'} onClick={() => setTab('plans')} className={'px-4 py-3 text-sm font-semibold ' + (tab === 'plans' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500')}>Lịch trình ({data.itineraries.length + aiPlans.length})</button>
         </nav>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {loading ? <p className="flex items-center gap-2 text-sm text-gray-500"><LoaderCircle className="h-4 w-4 animate-spin" /> Đang tải dữ liệu...</p> : null}
@@ -230,7 +258,38 @@ export function TravelCollections({ open, selectedProvince, onClose, onSelectPro
                 </div>
               </div>
               <div className="space-y-3">
-                <h3 className="font-bold text-gray-900">Đã lưu ({data.itineraries.length})</h3>
+                <h3 className="flex items-center gap-2 font-bold text-gray-900">
+                  <Sparkles className="h-4 w-4 text-emerald-700" aria-hidden="true"/> Lịch trình AI ({aiPlans.length})
+                </h3>
+                {aiPlansLoading ? <p className="flex items-center gap-2 text-sm text-gray-500">
+                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true"/> Đang tải lịch trình AI…
+                </p> : null}
+                {aiPlansError ? (
+                  <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {aiPlansError}
+                    <button type="button" onClick={() => setReload(n => n + 1)} className="font-semibold underline">Thử lại</button>
+                  </div>
+                ) : null}
+                {aiPlans.map(item => (
+                  <article key={item.id} className="flex flex-col gap-3 rounded-xl border border-emerald-100 bg-emerald-50/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <h4 className="break-words text-sm font-bold text-gray-900">{item.plan.title}</h4>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {provinceName(item.plan.provinceId)} · {item.plan.days} ngày · {item.plan.partySize} người
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => onOpenAiItinerary(item)}
+                      className="shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
+                      Xem trong AI Planner
+                    </button>
+                  </article>
+                ))}
+                {!aiPlans.length && !aiPlansLoading && !aiPlansError ? (
+                  <p className="text-sm text-gray-400">Chưa có lịch trình AI nào được lưu.</p>
+                ) : null}
+              </div>
+              <div className="space-y-3">
+                <h3 className="font-bold text-gray-900">Lịch trình ghi chú ({data.itineraries.length})</h3>
                 {data.itineraries.length ? [...data.itineraries].reverse().map((plan) => (
                   <article key={plan.id} className="rounded-xl border border-gray-200 p-4">
                     <div className="flex items-start justify-between gap-3">

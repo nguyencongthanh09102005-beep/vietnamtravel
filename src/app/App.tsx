@@ -11,6 +11,7 @@ import { VietnamMap } from './components/VietnamMap';
 import { provincesData } from '../data/provincesData';
 import type { AuthStateResponse, AuthUser } from '../types/auth';
 import { normalizeSearchText } from '../utils/text';
+import type { SavedItinerary } from '../utils/itinerary';
 
 function hasPasswordRecoveryLink(): boolean {
   if (typeof window === 'undefined') return false;
@@ -38,6 +39,7 @@ export default function App() {
   const [guestMode, setGuestMode] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [requestedSavedPlan, setRequestedSavedPlan] = useState<SavedItinerary | null>(null);
   const [pendingItinerary, setPendingItinerary] = useState<{ provinceId: string; notes: string } | null>(null);
 
   useEffect(() => {
@@ -398,7 +400,11 @@ export default function App() {
         open={plannerOpen}
         provinceId={selectedProvince}
         authenticated={Boolean(user)}
-        onClose={() => setPlannerOpen(false)}
+        requestedSavedPlan={requestedSavedPlan}
+        onClose={() => {
+          setPlannerOpen(false);
+          setRequestedSavedPlan(null);
+        }}
       />
       {user && <TravelCollections
         open={collectionsOpen}
@@ -407,6 +413,11 @@ export default function App() {
         onSelectProvince={selectProvince}
         draftItinerary={pendingItinerary}
         onDraftConsumed={() => setPendingItinerary(null)}
+        onOpenAiItinerary={(item) => {
+          setRequestedSavedPlan(item);
+          setCollectionsOpen(false);
+          setPlannerOpen(true);
+        }}
       />}
     </>
   );

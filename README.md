@@ -22,7 +22,9 @@ Chọn tỉnh trên bản đồ và nhấn **Lập lịch trình bằng AI** đ�
 - Tạo lịch trình có cấu trúc theo các buổi trong ngày, xem lại từng ngày và tổng ngân sách cho cả nhóm.
 - Sửa tên, giờ, chi phí, loại hoạt động; thêm/xóa hoạt động và tạo lại riêng một ngày mà không ghi đè các ngày khác.
 - Đăng nhập để lưu/mở lại/cập nhật/xóa lịch trình vào bảng `travel_plans` của SQLite/Turso; bản nháp của khách không tự lưu.
-- Giá và vị trí chỉ là gợi ý ước tính; nút Google Maps chỉ mở **tìm kiếm** địa điểm, không khẳng định đã định tuyến.
+- Bản đồ lịch trình **theo từng ngày** dùng OpenStreetMap: ghim đánh số cho các địa điểm đủ cụ thể và được dịch vụ geocoding tìm thấy. Món ăn chung/điểm không xác minh được sẽ không có ghim; có nút Google Maps để tự kiểm tra.
+- Nút **Mở chỉ đường Google Maps** đưa các địa điểm theo thứ tự vào Directions (chia thành các chặng nhỏ nếu nhiều điểm); nét đứt trên bản đồ chỉ minh họa thứ tự, **không phải tuyến đường thực tế**. Vị trí từ Nominatim công khai có cache và được giới hạn truy vấn.
+- Giá và vị trí chỉ là gợi ý ước tính; địa điểm, tuyến và giờ mở cửa cần được xác minh trước khi đi.
 - Sử dụng chung Gemini API với chatbot hiện có, hạn thời gian và model dự phòng.
 
 **Tài liệu:** [AI Itinerary Planner — kiến trúc, JSON contract và QA](docs/AI_ITINERARY_PLANNER.md).

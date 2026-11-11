@@ -78,8 +78,8 @@ test('AI returns a normal answer and safe map links with mocked provider', async
 });
 
 test('password recovery rejects malformed addresses without contacting Supabase', async () => {
-  process.env.SUPABASE_URL = 'https://example.supabase.co';
-  process.env.SUPABASE_ANON_KEY = 'test-key';
+  process.env.RESEND_API_KEY = 'test-key';
+  process.env.AUTH_EMAIL_FROM = 'tester@example.test';
   const response = await recover.fetch(new Request('https://example.test/api/auth/recover', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -89,8 +89,8 @@ test('password recovery rejects malformed addresses without contacting Supabase'
 });
 
 test('travel user data rejects requests without a valid session', async () => {
-  process.env.SUPABASE_URL = 'https://example.supabase.co';
-  process.env.SUPABASE_ANON_KEY = 'test-key';
+  process.env.TURSO_DATABASE_URL = '';
+  process.env.TURSO_AUTH_TOKEN = '';
   const response = await userData.fetch(new Request('https://example.test/api/user-data'));
   assert.equal(response.status, 401);
 });

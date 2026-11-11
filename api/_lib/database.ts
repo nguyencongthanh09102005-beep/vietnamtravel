@@ -45,9 +45,8 @@ function remoteEndpoint(url: string) {
   const parsed = new URL(url);
   if (!['libsql:', 'https:'].includes(parsed.protocol)) throw new Error('INVALID_TURSO_URL');
   if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('INVALID_TURSO_URL');
-  parsed.protocol = 'https:';
-  parsed.pathname = '/v2/pipeline';
-  return parsed.toString();
+  // URL.protocol cannot reliably switch a non-special "libsql:" scheme to "https:".
+  return 'https://' + parsed.host + '/v2/pipeline';
 }
 
 function toHrana(value: SqlValue) {

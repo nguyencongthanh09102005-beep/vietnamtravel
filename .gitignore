@@ -9,3 +9,10 @@ coverage
 *.log
 
 .api-test-dist/
+
+# Local SQLite user data (do not commit)
+.data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3

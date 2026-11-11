@@ -29,8 +29,9 @@ function localApi(): Plugin {
       // loadEnv with prefix '' reads private values too; do not return these
       // values in the Vite config or expose them to client-side code.
       const env = loadEnv(server.config.mode, server.config.root, '');
-      for (const key of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'GEMINI_API_KEY', 'GEMINI_MODEL',
-        'GEMINI_FALLBACK_MODEL', 'GOOGLE_MAPS_API_KEY']) {
+      for (const key of ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN', 'LOCAL_DB_PATH',
+        'RESEND_API_KEY', 'AUTH_EMAIL_FROM', 'AUTH_PUBLIC_URL',
+        'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_FALLBACK_MODEL', 'GOOGLE_MAPS_API_KEY']) {
         if (process.env[key] === undefined && env[key] !== undefined) {
           process.env[key] = env[key];
         }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bookmark, ChevronDown, LogIn, LogOut, UserRound } from 'lucide-react';
+import { Bookmark, ChevronDown, LogIn, LogOut, Pencil, UserRound } from 'lucide-react';
 import type { AuthUser } from '../../types/auth';
 
 interface UserMenuProps {
@@ -8,6 +8,7 @@ interface UserMenuProps {
   onLogout: () => Promise<void> | void;
   onOpenAuth: () => void;
   onOpenCollections: () => void;
+  onProfileUpdated: (user: AuthUser) => void;
 }
 
 function initials(user: AuthUser) {
@@ -20,9 +21,43 @@ function initials(user: AuthUser) {
     .join('');
 }
 
-export function UserMenu({ user, guest, onLogout, onOpenAuth, onOpenCollections }: UserMenuProps) {
+export function UserMenu({ user, guest, onLogout, onOpenAuth, onOpenCollections, onProfileUpdated }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? '');
+  const [profileError, setProfileError] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  useEffect(() => {
+    setDisplayName(user?.displayName ?? '');
+    setAvatarUrl(user?.avatarUrl ?? '');
+  }, [user?.id]);
+
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setProfileError('');
+    setProfileSaving(true);
+    try {
+      const response = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName, avatarUrl }),
+      });
+      const payload = (await response.json()) as { user?: AuthUser; error?: string };
+      if (!response.ok || !payload.user) {
+        setProfileError(payload.error ?? 'Không thể lưu hồ sơ.');
+        return;
+      }
+      onProfileUpdated(payload.user);
+      setEditing(false);
+    } catch {
+      setProfileError('Không kết nối được máy chủ.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -72,6 +107,25 @@ export function UserMenu({ user, guest, onLogout, onOpenAuth, onOpenCollections 
             <p className="mt-0.5 truncate text-xs text-gray-500">{user.email}</p>
             <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Lịch sử và hành trình cá nhân</p>
           </div>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => setEditing((value) => !value)}
+            className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-50"
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            Chỉnh sửa hồ sơ
+          </button>
+          {editing ? (
+            <form onSubmit={(event) => void saveProfile(event)} className="space-y-2 rounded-xl bg-gray-50 p-3">
+              <label className="block text-xs font-semibold text-gray-700" htmlFor="profile-name">Tên hiển thị</label>
+              <input id="profile-name" value={displayName} maxLength={80} onChange={(event) => setDisplayName(event.target.value)} className="w-full rounded-lg border border-gray-200 bg-white p-2 text-sm" />
+              <label className="block text-xs font-semibold text-gray-700" htmlFor="profile-avatar">URL ảnh đại diện (HTTPS, tùy chọn)</label>
+              <input id="profile-avatar" value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} className="w-full rounded-lg border border-gray-200 bg-white p-2 text-sm" placeholder="https://..." />
+              {profileError ? <p role="alert" className="text-xs text-rose-700">{profileError}</p> : null}
+              <button type="submit" disabled={profileSaving} className="rounded-lg bg-gray-950 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{profileSaving ? 'Đang lưu...' : 'Lưu hồ sơ'}</button>
+            </form>
+          ) : null}
           <button
             type="button"
             role="menuitem"

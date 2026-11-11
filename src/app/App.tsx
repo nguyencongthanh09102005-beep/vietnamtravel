@@ -258,6 +258,7 @@ export default function App() {
                     onLogout={logout}
                     onOpenAuth={openAuth}
                     onOpenCollections={() => setCollectionsOpen(true)}
+                    onProfileUpdated={(updated) => setUser(updated)}
                   />
                 </div>
               </div>

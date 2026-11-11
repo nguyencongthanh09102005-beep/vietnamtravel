@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {
   ArrowRight,
   Eye,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import type { AuthUser } from '../../types/auth';
 
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'recover' | 'reset';
 
 interface AuthScreenProps {
   configured: boolean;
@@ -37,6 +37,18 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [recoveryToken, setRecoveryToken] = useState('');
+
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const token = fragment.get('access_token');
+    if (fragment.get('type') === 'recovery' && token) {
+      setRecoveryToken(token);
+      setMode('reset');
+      // Do not leave the recovery token in browser history or the URL bar.
+      window.history.replaceState({}, '', window.location.pathname + window.location.search);
+    }
+  }, []);
 
   const changeMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -49,16 +61,21 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
     setError('');
     setNotice('');
 
-    if (!email.trim() || !password) {
-      setError('Bạn nhập email và mật khẩu trước nha.');
+    if (mode === 'recover' && !email.trim()) {
+      setError('Hãy nhập email để nhận liên kết đặt lại mật khẩu.');
       return;
     }
-
-    if (mode === 'register') {
-      if (displayName.trim().length < 2) {
-        setError('Tên hiển thị cần ít nhất 2 ký tự.');
+    if (mode === 'login' || mode === 'register') {
+      if (!email.trim() || !password) {
+        setError('Bạn nhập email và mật khẩu trước nha.');
         return;
       }
+    }
+    if (mode === 'register' && displayName.trim().length < 2) {
+      setError('Tên hiển thị cần ít nhất 2 ký tự.');
+      return;
+    }
+    if (mode === 'register' || mode === 'reset') {
       if (password.length < 8) {
         setError('Mật khẩu cần ít nhất 8 ký tự.');
         return;
@@ -68,10 +85,42 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
         return;
       }
     }
+    if (mode === 'reset' && !recoveryToken) {
+      setError('Liên kết đặt lại mật khẩu không hợp lệ.');
+      return;
+    }
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/auth/${mode === 'login' ? 'login' : 'register'}`, {
+      if (mode === 'recover') {
+        const response = await fetch('/api/auth/recover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        const payload = (await response.json()) as { error?: string; message?: string };
+        if (!response.ok) { setError(payload.error ?? 'Không thể gửi email lúc này.'); return; }
+        setNotice(payload.message ?? 'Hãy kiểm tra email để đặt lại mật khẩu.');
+        return;
+      }
+
+      if (mode === 'reset') {
+        const response = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: recoveryToken, password }),
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) { setError(payload.error ?? 'Không cập nhật được mật khẩu.'); return; }
+        setRecoveryToken('');
+        setPassword('');
+        setConfirmPassword('');
+        setMode('login');
+        setNotice('Đặt lại mật khẩu thành công! Bạn có thể đăng nhập.');
+        return;
+      }
+
+      const response = await fetch('/api/auth/' + mode, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -165,19 +214,23 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
 
             <div className="mb-7">
               <p className="text-sm font-semibold text-blue-600">
-                {mode === 'login' ? 'Chào mừng bạn quay lại' : 'Bắt đầu hành trình của riêng bạn'}
+                {mode === 'login' ? 'Chào mừng bạn quay lại' : mode === 'register' ? 'Bắt đầu hành trình' : 'Bảo mật tài khoản'}
               </p>
               <h2 className="mt-2 text-3xl font-black tracking-tight text-gray-950">
-                {mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
+                {mode === 'login' ? 'Đăng nhập' : mode === 'register' ? 'Tạo tài khoản' : mode === 'recover' ? 'Quên mật khẩu' : 'Đặt lại mật khẩu'}
               </h2>
               <p className="mt-2 text-sm leading-6 text-gray-500">
                 {mode === 'login'
                   ? 'Tiếp tục khám phá các tỉnh thành và những gợi ý bạn đã lưu.'
-                  : 'Tạo một tài khoản để đồng bộ dữ liệu du lịch trên nhiều thiết bị.'}
+                  : mode === 'register'
+                    ? 'Tạo tài khoản để đồng bộ dữ liệu du lịch trên nhiều thiết bị.'
+                    : mode === 'recover'
+                      ? 'Nhập email đăng ký để nhận liên kết đặt lại mật khẩu.'
+                      : 'Nhập mật khẩu mới để khôi phục tài khoản.'}
               </p>
             </div>
 
-            <div className="mb-6 grid grid-cols-2 rounded-xl bg-gray-100 p-1">
+            {(mode === 'login' || mode === 'register') ? <div className="mb-6 grid grid-cols-2 rounded-xl bg-gray-100 p-1">
               <button
                 type="button"
                 onClick={() => changeMode('login')}
@@ -196,7 +249,7 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
               >
                 Đăng ký
               </button>
-            </div>
+            </div> : <button type="button" onClick={() => changeMode('login')} className="mb-6 text-sm font-semibold text-blue-700 hover:underline">Quay lại đăng nhập</button>}
 
             {!configured ? (
               <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-800">
@@ -224,6 +277,7 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
                 </div>
               ) : null}
 
+              {mode !== 'reset' ? (
               <div>
                 <label htmlFor="auth-email" className="mb-1.5 block text-sm font-semibold text-gray-700">
                   Email
@@ -241,7 +295,9 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
                   />
                 </div>
               </div>
+              ) : null}
 
+              {mode !== 'recover' ? (
               <div>
                 <label htmlFor="auth-password" className="mb-1.5 block text-sm font-semibold text-gray-700">
                   Mật khẩu
@@ -267,8 +323,9 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
                   </button>
                 </div>
               </div>
+              ) : null}
 
-              {mode === 'register' ? (
+              {(mode === 'register' || mode === 'reset') ? (
                 <div>
                   <label htmlFor="auth-confirm" className="mb-1.5 block text-sm font-semibold text-gray-700">
                     Xác nhận mật khẩu
@@ -297,10 +354,12 @@ export function AuthScreen({ configured, onAuthenticated, onGuest }: AuthScreenP
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-5 text-sm font-bold text-white shadow-lg shadow-gray-950/10 transition hover:-translate-y-0.5 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-                {mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
+                {mode === 'login' ? 'Đăng nhập' : mode === 'register' ? 'Tạo tài khoản' : mode === 'recover' ? 'Gửi email khôi phục' : 'Đổi mật khẩu'}
                 {!loading ? <ArrowRight className="h-4 w-4" aria-hidden="true" /> : null}
               </button>
             </form>
+
+            {mode === 'login' ? <button type="button" onClick={() => changeMode('recover')} className="mt-3 text-sm font-semibold text-blue-700 hover:underline">Quên mật khẩu?</button> : null}
 
             <div className="my-5 flex items-center gap-3 text-xs text-gray-400">
               <span className="h-px flex-1 bg-gray-200" />

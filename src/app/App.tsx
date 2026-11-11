@@ -26,6 +26,7 @@ function getProvinceFromUrl(): string {
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState(getProvinceFromUrl);
   const [keyword, setKeyword] = useState('');
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const [started, setStarted] = useState(() => Boolean(getProvinceFromUrl()) || hasPasswordRecoveryLink());
   const [forceRecovery, setForceRecovery] = useState(hasPasswordRecoveryLink);
   const [shareMessage, setShareMessage] = useState('');
@@ -90,6 +91,7 @@ export default function App() {
     if (!Object.prototype.hasOwnProperty.call(provincesData, province)) return;
     setSelectedProvince(province);
     setKeyword('');
+    setActiveSearchIndex(-1);
     setShareMessage('');
     const url = new URL(window.location.href);
     if (url.searchParams.get('province') !== province) {
@@ -286,10 +288,28 @@ export default function App() {
                   autoComplete="off"
                   placeholder="Tìm tỉnh, ví dụ: Ha Noi..."
                   value={keyword}
-                  onChange={(event) => setKeyword(event.target.value)}
+                  onChange={(event) => { setKeyword(event.target.value); setActiveSearchIndex(-1); }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setKeyword('');
+                      setActiveSearchIndex(-1);
+                    } else if (event.key === 'ArrowDown' && filtered.length) {
+                      event.preventDefault();
+                      setActiveSearchIndex((index) => Math.min(index + 1, filtered.length - 1));
+                    } else if (event.key === 'ArrowUp' && filtered.length) {
+                      event.preventDefault();
+                      setActiveSearchIndex((index) => Math.max(index - 1, 0));
+                    } else if (event.key === 'Enter' && filtered.length) {
+                      event.preventDefault();
+                      selectProvince(filtered[activeSearchIndex >= 0 ? activeSearchIndex : 0]);
+                    }
+                  }}
                   className="w-full rounded-xl border border-gray-200 bg-white/90 py-2.5 pl-9 pr-3 text-sm shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  role="combobox"
+                  aria-autocomplete="list"
                   aria-controls="province-search-results"
                   aria-expanded={Boolean(keyword)}
+                  aria-activedescendant={activeSearchIndex >= 0 ? 'province-option-' + activeSearchIndex : undefined}
                 />
               </div>
 
@@ -300,14 +320,16 @@ export default function App() {
                   className="absolute left-2 right-2 z-30 mt-2 max-h-56 overflow-y-auto rounded-xl border border-gray-100 bg-white p-1 shadow-lg"
                 >
                   {filtered.length > 0 ? (
-                    filtered.map((province) => (
+                    filtered.map((province, index) => (
                       <button
                         key={province}
+                        id={'province-option-' + index}
                         type="button"
                         role="option"
-                        aria-selected={selectedProvince === province}
+                        aria-selected={activeSearchIndex === index}
+                        onMouseEnter={() => setActiveSearchIndex(index)}
                         onClick={() => selectProvince(province)}
-                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-sky-50 focus-visible:bg-sky-50 focus-visible:outline-none"
+                        className={'block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-sky-50 focus-visible:bg-sky-50 focus-visible:outline-none ' + (activeSearchIndex === index ? 'bg-sky-50 font-semibold' : '')}
                       >
                         {provincesData[province].name}
                       </button>

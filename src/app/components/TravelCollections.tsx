@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bookmark, CheckCircle2, LoaderCircle, MapPin, Pencil, Trash2, X } from 'lucide-react';
 import { provincesData, type ProvinceId } from '../../data/provincesData';
 
@@ -42,6 +42,7 @@ function parseData(raw: unknown): TravelData {
 }
 
 export function TravelCollections({ open, selectedProvince, onClose, onSelectProvince, draftItinerary, onDraftConsumed }: Props) {
+  const dialogRef = useRef<HTMLElement>(null);
   const [data, setData] = useState<TravelData>(blank);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -92,9 +93,28 @@ export function TravelCollections({ open, selectedProvince, onClose, onSelectPro
 
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { onClose(); return; }
+      if (event.key !== 'Tab') return;
+      const focusables = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]') ?? [])];
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus();
+    };
   }, [open, onClose]);
 
   async function save(patch: Partial<TravelData>) {
@@ -153,7 +173,7 @@ export function TravelCollections({ open, selectedProvince, onClose, onSelectPro
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-gray-950/65 p-2 sm:p-6">
-      <section role="dialog" aria-modal="true" aria-labelledby="travel-title" className="flex max-h-[95dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <section ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="travel-title" className="flex max-h-[95dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <header className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>
             <h2 id="travel-title" className="text-lg font-bold text-gray-900">Hành trình của tôi</h2>

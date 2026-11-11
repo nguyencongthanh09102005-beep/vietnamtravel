@@ -5,7 +5,7 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 ## Điểm nổi bật
 
 - Bản đồ Việt Nam dạng SVG có thể click, zoom, pan và reset.
-- Tìm tỉnh thành bằng tiếng Việt có dấu hoặc không dấu.
+- Tìm tỉnh thành bằng tiếng Việt có dấu hoặc không dấu; hỗ trợ điều hướng kết quả bằng phím mũi tên, Enter và Escape.
 - Chọn tỉnh từ ô tìm kiếm sẽ tự đồng bộ và zoom bản đồ tới khu vực tương ứng.
 - Nội dung được chia thành 4 nhóm: Tổng quan, Lịch sử, Địa điểm và Ẩm thực.
 - Đăng ký/đăng nhập bằng email, session lưu bằng HttpOnly cookie.

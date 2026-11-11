@@ -1,93 +1,40 @@
-import {
-  appendCookies,
-  authCookies,
-  getSupabaseConfig,
-  supabaseAuthFetch,
-  toPublicUser,
-} from '../_lib/supabase.js';
-
-interface RegisterBody {
-  email?: string;
-  password?: string;
-  displayName?: string;
-}
-
-interface RegisterPayload {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  user?: {
-    id: string;
-    email?: string;
-    created_at?: string;
-    user_metadata?: { full_name?: string; avatar_url?: string };
-  };
-  error_description?: string;
-  msg?: string;
-}
-
-function json(data: unknown, status = 200, cookies: string[] = []) {
-  const headers = new Headers({ 'Cache-Control': 'no-store' });
-  appendCookies(headers, cookies);
-  return Response.json(data, { status, headers });
-}
+import { createSession, dbQuery, hashPassword, json, makeId, normalizeEmail, sessionCookie, validEmail, validProfileName, withinRateLimit } from '../_lib/auth.js';
 
 export default {
   async fetch(request: Request) {
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+    let body: { email?: unknown; password?: unknown; displayName?: unknown };
+    try { body = await request.json(); }
+    catch { return json({ error: 'Dữ liệu đăng ký không hợp lệ.' }, 400); }
 
-    if (!getSupabaseConfig().configured) {
-      return json({ error: 'Hệ thống tài khoản chưa được kết nối database trên Vercel.' }, 503);
+    const email = normalizeEmail(body?.email);
+    const password = typeof body?.password === 'string' ? body.password : '';
+    const displayName = typeof body?.displayName === 'string' ? body.displayName.trim() : '';
+    if (!validEmail(email) || !validProfileName(displayName) || password.length < 8 || password.length > 128) {
+      return json({ error: 'Cần tên 2–80 ký tự, email hợp lệ và mật khẩu 8–128 ký tự.' }, 400);
     }
-
-    let body: RegisterBody;
     try {
-      body = (await request.json()) as RegisterBody;
-    } catch {
-      return json({ error: 'Dữ liệu đăng ký không hợp lệ.' }, 400);
-    }
-
-    const email = body.email?.trim().toLowerCase() ?? '';
-    const password = body.password ?? '';
-    const displayName = body.displayName?.trim() ?? '';
-
-    if (!email || !password || displayName.length < 2) {
-      return json({ error: 'Hãy nhập đủ tên, email và mật khẩu.' }, 400);
-    }
-    if (password.length < 8) {
-      return json({ error: 'Mật khẩu cần ít nhất 8 ký tự.' }, 400);
-    }
-
-    try {
-      const response = await supabaseAuthFetch('/auth/v1/signup', {
-        method: 'POST',
-        body: JSON.stringify({
-          email,
-          password,
-          data: { full_name: displayName },
-        }),
-      });
-      const payload = (await response.json()) as RegisterPayload;
-
-      if (!response.ok || !payload.user) {
-        return json(
-          { error: payload.error_description || payload.msg || 'Không thể tạo tài khoản.' },
-          response.status >= 400 ? response.status : 400,
-        );
+      if (!await withinRateLimit(request, 'register', '', 5, 3600)) {
+        return json({ error: 'Đăng ký quá nhiều lần. Hãy thử lại sau.' }, 429);
       }
-
-      if (payload.access_token && payload.refresh_token) {
-        return json(
-          { user: toPublicUser(payload.user), needsEmailConfirmation: false },
-          200,
-          authCookies(payload),
-        );
-      }
-
-      return json({ user: null, needsEmailConfirmation: true });
+      const userId = makeId();
+      const passwordHash = await hashPassword(password);
+      await dbQuery(
+        'INSERT INTO users (id,email,password_hash,display_name,created_at) VALUES (?,?,?,?,?)',
+        [userId, email, passwordHash, displayName, new Date().toISOString()],
+      );
+      const token = await createSession(userId);
+      return json({
+        user: { id: userId, email, displayName, avatarUrl: null, createdAt: new Date().toISOString() },
+        needsEmailConfirmation: false,
+      }, 200, [sessionCookie(token)]);
     } catch (error) {
-      console.error('Supabase registration connection failed:', error);
-      return json({ error: 'Không kết nối được Supabase. Hãy kiểm tra URL dự án và mạng rồi thử lại.' }, 502);
+      const details = String(error);
+      if (/UNIQUE|constraint failed|SQLITE_CONSTRAINT/i.test(details)) {
+        return json({ error: 'Email này đã có tài khoản. Hãy thử đăng nhập.' }, 409);
+      }
+      console.error('[auth/register] database error:', error);
+      return json({ error: 'Không tạo được tài khoản. Kiểm tra database hoặc thử lại.' }, 503);
     }
   },
 };

@@ -9,6 +9,7 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 - Chọn tỉnh từ ô tìm kiếm sẽ tự đồng bộ và zoom bản đồ tới khu vực tương ứng.
 - Nội dung được chia thành 4 nhóm: Tổng quan, Lịch sử, Địa điểm và Ẩm thực.
 - Đăng ký/đăng nhập bằng email, session lưu bằng HttpOnly cookie.
+- Khôi phục mật khẩu qua email và chỉnh sửa tên/URL ảnh đại diện (HTTPS) trong menu người dùng.
 - Có chế độ khách để vẫn dùng website khi chưa đăng nhập.
 - Dữ liệu tài khoản có thể lưu riêng theo từng user bằng Supabase + Row Level Security.
 - Trợ lý AI du lịch dạng chat, thu gọn/mở rộng ngay bên cạnh phần thông tin tỉnh.
@@ -151,9 +152,14 @@ Các endpoint:
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
+- `POST /api/auth/recover` (gửi email khôi phục)
+- `POST /api/auth/reset-password` (đổi mật khẩu bằng recovery token)
+- `PATCH /api/auth/profile` (đổi tên/URL ảnh)
 - `GET/PATCH /api/user-data`
 
 Nếu Supabase chưa được cấu hình, website vẫn cho phép **Tiếp tục với tư cách khách** để không khóa phần bản đồ/AI hiện có.
+
+**Khôi phục mật khẩu:** trong Supabase Auth → URL Configuration, cho phép Site URL/Redirect URLs tương ứng với domain production và preview được thử nghiệm. Luồng khôi phục hiện nhận access token trong URL fragment của email recovery kiểu implicit; cần QA email thật trước khi đưa lên production.
 
 ## Cấu hình AI trên Vercel
 
@@ -225,7 +231,7 @@ Một phần giao diện ban đầu được khởi tạo từ Figma Make rồi 
 ## Hướng phát triển tiếp
 
 - Bổ sung user location nếu người dùng đồng ý chia sẻ vị trí để cá nhân hóa gợi ý.
-- Hoàn thiện quên mật khẩu, chỉnh sửa hồ sơ và khả năng tiếp cận với bàn phím trên bản đồ.
+- Hoàn thiện khả năng tiếp cận với bàn phím trên bản đồ và nâng cấp avatar thành upload lên Storage (hiện dùng HTTPS URL).
 - Thêm test tích hợp cho auth, assistant, search và tương tác bản đồ.
 - Thêm rate limiting chia sẻ trên toàn bộ serverless instances cho AI (với Redis/managed gateway).
 - Theo dõi Lighthouse/Core Web Vitals trên bản production.

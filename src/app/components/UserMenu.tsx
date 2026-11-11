@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Bookmark, ChevronDown, LogIn, LogOut, Pencil, UserRound } from 'lucide-react';
 import type { AuthUser } from '../../types/auth';
+import { ImageWithFallback } from './figma/ImageWithFallback';
 
 interface UserMenuProps {
   user: AuthUser | null;
@@ -35,7 +36,7 @@ export function UserMenu({ user, guest, onLogout, onOpenAuth, onOpenCollections,
     setAvatarUrl(user?.avatarUrl ?? '');
   }, [user?.id]);
 
-  const saveProfile = async (event: React.FormEvent) => {
+  const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
     setProfileError('');
     setProfileSaving(true);
@@ -90,9 +91,11 @@ export function UserMenu({ user, guest, onLogout, onOpenAuth, onOpenCollections,
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-950 text-[11px] font-black text-white">
-          {initials(user) || 'VT'}
-        </span>
+        {user.avatarUrl
+          ? <ImageWithFallback src={user.avatarUrl} alt="Ảnh đại diện" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-950 text-[11px] font-black text-white">
+              {initials(user) || 'VT'}
+            </span>}
         <span className="hidden min-w-0 sm:block">
           <span className="block max-w-28 truncate text-xs font-bold text-gray-900">{user.displayName}</span>
           <span className="block max-w-28 truncate text-[10px] text-gray-400">{user.email}</span>

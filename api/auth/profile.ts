@@ -3,6 +3,7 @@ import {
   getRequestAuthSession,
   getSupabaseConfig,
   supabaseAuthFetch,
+  supabaseRestFetch,
   toPublicUser,
 } from '../_lib/supabase.js';
 
@@ -47,6 +48,20 @@ export default {
       }, session.accessToken);
       if (!response.ok) return json({ error: 'Không cập nhật được hồ sơ.' }, 502, session.cookies);
       const updated = await response.json();
+      // Keep the profile table aligned with Supabase Auth metadata, when available.
+      try {
+        const updateProfile = await supabaseRestFetch(
+          '/profiles?id=eq.' + encodeURIComponent(session.user.id),
+          session.accessToken,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ display_name: displayName, avatar_url: avatarUrl || null, updated_at: new Date().toISOString() }),
+          },
+        );
+        if (!updateProfile.ok) console.warn('Profile row sync returned', updateProfile.status);
+      } catch (error) {
+        console.warn('Unable to synchronize profile row', error);
+      }
       return json({ user: toPublicUser(updated) }, 200, session.cookies);
     } catch {
       return json({ error: 'Không kết nối được máy chủ.' }, 502, session.cookies);

@@ -133,7 +133,7 @@ export function TravelCollections({ open, selectedProvince, onClose, onSelectPro
     }
     const existing = data.itineraries.find((item) => item.id === editId);
     const plan: TripPlan = {
-      id: existing?.id ?? crypto.randomUUID(),
+      id: existing?.id ?? (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2)),
       provinceId: picked,
       title: title.trim().slice(0, 120),
       notes: notes.trim().slice(0, 12000),

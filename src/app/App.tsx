@@ -11,6 +11,12 @@ import { provincesData } from '../data/provincesData';
 import type { AuthStateResponse, AuthUser } from '../types/auth';
 import { normalizeSearchText } from '../utils/text';
 
+function hasPasswordRecoveryLink(): boolean {
+  if (typeof window === 'undefined') return false;
+  const query = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return query.get('type') === 'recovery' && Boolean(query.get('access_token'));
+}
+
 function getProvinceFromUrl(): string {
   if (typeof window === 'undefined') return '';
   const id = new URLSearchParams(window.location.search).get('province') ?? '';
@@ -20,7 +26,8 @@ function getProvinceFromUrl(): string {
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState(getProvinceFromUrl);
   const [keyword, setKeyword] = useState('');
-  const [started, setStarted] = useState(() => Boolean(getProvinceFromUrl()));
+  const [started, setStarted] = useState(() => Boolean(getProvinceFromUrl()) || hasPasswordRecoveryLink());
+  const [forceRecovery, setForceRecovery] = useState(hasPasswordRecoveryLink);
   const [shareMessage, setShareMessage] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -189,7 +196,7 @@ export default function App() {
         </div>
       </motion.main>
     );
-  } else if (!user && !guestMode) {
+  } else if (forceRecovery || (!user && !guestMode)) {
     content = (
       <motion.div
         key="auth"
@@ -203,9 +210,10 @@ export default function App() {
           onAuthenticated={(authenticatedUser) => {
             setUser(authenticatedUser);
             setGuestMode(false);
+            setForceRecovery(false);
             setAuthConfigured(true);
           }}
-          onGuest={() => setGuestMode(true)}
+          onGuest={() => { setForceRecovery(false); setGuestMode(true); }}
         />
       </motion.div>
     );

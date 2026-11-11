@@ -66,6 +66,14 @@ async function lookupPlace(title: string, province: string): Promise<GeoEntry> {
     // Reject hits outside the selected province rather than show a misleading pin.
     if (!addressRegion.some(part => part === region || part.includes(region))) continue;
     if (typeof item.display_name !== 'string' || !item.display_name) continue;
+    if (['administrative', 'city', 'state', 'county', 'country'].includes(String(item.type)) ||
+        ['administrative', 'city', 'state', 'county', 'country'].includes(String(item.addresstype))) continue;
+    const firstPlaceName = normalize(item.display_name.split(',')[0]);
+    const expectedName = normalize(title);
+    // Geocoder can fall back to a province/city even when a place was not found.
+    // Require the result's own place name to overlap with the requested stop.
+    if (firstPlaceName.length < 5 ||
+        !(firstPlaceName.includes(expectedName) || (expectedName.includes(firstPlaceName) && firstPlaceName.length >= 7))) continue;
     return { lat, lon, label: item.display_name.slice(0, 260) };
   }
   return { lat: null, lon: null, label: '' };

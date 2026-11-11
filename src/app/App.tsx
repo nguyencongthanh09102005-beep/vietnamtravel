@@ -1,24 +1,42 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LoaderCircle, Search } from 'lucide-react';
+import { Bookmark, LoaderCircle, Search, Share2 } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { ProvinceDetails } from './components/ProvinceDetails';
 import { TravelAiAssistant } from './components/TravelAiAssistant';
+import { TravelCollections } from './components/TravelCollections';
 import { UserMenu } from './components/UserMenu';
 import { VietnamMap } from './components/VietnamMap';
 import { provincesData } from '../data/provincesData';
 import type { AuthStateResponse, AuthUser } from '../types/auth';
 import { normalizeSearchText } from '../utils/text';
 
+function hasPasswordRecoveryLink(): boolean {
+  if (typeof window === 'undefined') return false;
+  const query = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  return query.get('type') === 'recovery' && Boolean(query.get('access_token'));
+}
+
+function getProvinceFromUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const id = new URLSearchParams(window.location.search).get('province') ?? '';
+  return Object.prototype.hasOwnProperty.call(provincesData, id) ? id : '';
+}
+
 export default function App() {
-  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedProvince, setSelectedProvince] = useState(getProvinceFromUrl);
   const [keyword, setKeyword] = useState('');
-  const [started, setStarted] = useState(false);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
+  const [started, setStarted] = useState(() => Boolean(getProvinceFromUrl()) || hasPasswordRecoveryLink());
+  const [forceRecovery, setForceRecovery] = useState(hasPasswordRecoveryLink);
+  const [shareMessage, setShareMessage] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authConfigured, setAuthConfigured] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [guestMode, setGuestMode] = useState(false);
+  const [collectionsOpen, setCollectionsOpen] = useState(false);
+  const [pendingItinerary, setPendingItinerary] = useState<{ provinceId: string; notes: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -45,6 +63,16 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const onNavigate = () => {
+      const id = getProvinceFromUrl();
+      setSelectedProvince(id);
+      if (id) setStarted(true);
+    };
+    window.addEventListener('popstate', onNavigate);
+    return () => window.removeEventListener('popstate', onNavigate);
+  }, []);
+
   const provinces = useMemo(
     () => Object.keys(provincesData) as Array<keyof typeof provincesData>,
     [],
@@ -60,8 +88,28 @@ export default function App() {
   }, [keyword, provinces]);
 
   const selectProvince = (province: string) => {
+    if (!Object.prototype.hasOwnProperty.call(provincesData, province)) return;
     setSelectedProvince(province);
     setKeyword('');
+    setActiveSearchIndex(-1);
+    setShareMessage('');
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('province') !== province) {
+      url.searchParams.set('province', province);
+      window.history.pushState({}, '', url);
+    }
+  };
+
+  const shareProvince = async () => {
+    if (!selectedProvince) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('province', selectedProvince);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setShareMessage('Đã sao chép liên kết');
+    } catch {
+      setShareMessage('Không sao chép được liên kết');
+    }
   };
 
   const logout = async () => {
@@ -71,6 +119,8 @@ export default function App() {
       setUser(null);
       setGuestMode(false);
       setAiOpen(false);
+      setCollectionsOpen(false);
+      setPendingItinerary(null);
     }
   };
 
@@ -148,7 +198,7 @@ export default function App() {
         </div>
       </motion.main>
     );
-  } else if (!user && !guestMode) {
+  } else if (forceRecovery || (!user && !guestMode)) {
     content = (
       <motion.div
         key="auth"
@@ -162,9 +212,10 @@ export default function App() {
           onAuthenticated={(authenticatedUser) => {
             setUser(authenticatedUser);
             setGuestMode(false);
+            setForceRecovery(false);
             setAuthConfigured(true);
           }}
-          onGuest={() => setGuestMode(true)}
+          onGuest={() => { setForceRecovery(false); setGuestMode(true); }}
         />
       </motion.div>
     );
@@ -190,13 +241,38 @@ export default function App() {
                   </p>
                 </div>
 
-                <UserMenu
-                  user={user}
-                  guest={guestMode}
-                  onLogout={logout}
-                  onOpenAuth={openAuth}
-                />
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!selectedProvince}
+                    aria-label="Sao chép liên kết chia sẻ tỉnh đang chọn"
+                    title="Chia sẻ tỉnh đang chọn"
+                    onClick={() => void shareProvince()}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-slate-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  {user && (
+                    <button
+                      type="button"
+                      aria-label="Mở hành trình của tôi"
+                      onClick={() => setCollectionsOpen(true)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-slate-700 hover:bg-sky-50"
+                    >
+                      <Bookmark className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                  <UserMenu
+                    user={user}
+                    guest={guestMode}
+                    onLogout={logout}
+                    onOpenAuth={openAuth}
+                    onOpenCollections={() => setCollectionsOpen(true)}
+                    onProfileUpdated={(updated) => setUser(updated)}
+                  />
+                </div>
               </div>
+              <p role="status" aria-live="polite" className="text-xs text-emerald-700">{shareMessage}</p>
 
               <label htmlFor="province-search" className="sr-only">
                 Tìm tỉnh thành
@@ -212,10 +288,28 @@ export default function App() {
                   autoComplete="off"
                   placeholder="Tìm tỉnh, ví dụ: Ha Noi..."
                   value={keyword}
-                  onChange={(event) => setKeyword(event.target.value)}
+                  onChange={(event) => { setKeyword(event.target.value); setActiveSearchIndex(-1); }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setKeyword('');
+                      setActiveSearchIndex(-1);
+                    } else if (event.key === 'ArrowDown' && filtered.length) {
+                      event.preventDefault();
+                      setActiveSearchIndex((index) => Math.min(index + 1, filtered.length - 1));
+                    } else if (event.key === 'ArrowUp' && filtered.length) {
+                      event.preventDefault();
+                      setActiveSearchIndex((index) => Math.max(index - 1, 0));
+                    } else if (event.key === 'Enter' && filtered.length) {
+                      event.preventDefault();
+                      selectProvince(filtered[activeSearchIndex >= 0 ? activeSearchIndex : 0]);
+                    }
+                  }}
                   className="w-full rounded-xl border border-gray-200 bg-white/90 py-2.5 pl-9 pr-3 text-sm shadow-sm outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                  role="combobox"
+                  aria-autocomplete="list"
                   aria-controls="province-search-results"
                   aria-expanded={Boolean(keyword)}
+                  aria-activedescendant={activeSearchIndex >= 0 ? 'province-option-' + activeSearchIndex : undefined}
                 />
               </div>
 
@@ -226,14 +320,16 @@ export default function App() {
                   className="absolute left-2 right-2 z-30 mt-2 max-h-56 overflow-y-auto rounded-xl border border-gray-100 bg-white p-1 shadow-lg"
                 >
                   {filtered.length > 0 ? (
-                    filtered.map((province) => (
+                    filtered.map((province, index) => (
                       <button
                         key={province}
+                        id={'province-option-' + index}
                         type="button"
                         role="option"
-                        aria-selected={selectedProvince === province}
+                        aria-selected={activeSearchIndex === index}
+                        onMouseEnter={() => setActiveSearchIndex(index)}
                         onClick={() => selectProvince(province)}
-                        className="block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-sky-50 focus-visible:bg-sky-50 focus-visible:outline-none"
+                        className={'block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-sky-50 focus-visible:bg-sky-50 focus-visible:outline-none ' + (activeSearchIndex === index ? 'bg-sky-50 font-semibold' : '')}
                       >
                         {provincesData[province].name}
                       </button>
@@ -271,6 +367,10 @@ export default function App() {
                 open={aiOpen}
                 onToggle={() => setAiOpen((value) => !value)}
                 authenticated={Boolean(user)}
+                onSaveItinerary={(notes) => {
+                  setPendingItinerary({ provinceId: selectedProvince, notes });
+                  setCollectionsOpen(true);
+                }}
               />
             </div>
           </section>
@@ -279,5 +379,17 @@ export default function App() {
     );
   }
 
-  return <AnimatePresence mode="wait">{content}</AnimatePresence>;
+  return (
+    <>
+      <AnimatePresence mode="wait">{content}</AnimatePresence>
+      {user && <TravelCollections
+        open={collectionsOpen}
+        selectedProvince={selectedProvince}
+        onClose={() => setCollectionsOpen(false)}
+        onSelectProvince={selectProvince}
+        draftItinerary={pendingItinerary}
+        onDraftConsumed={() => setPendingItinerary(null)}
+      />}
+    </>
+  );
 }

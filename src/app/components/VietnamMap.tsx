@@ -101,7 +101,7 @@ export function VietnamMap({
   const chooseFromEventTarget = (target: EventTarget | null) => {
     if (!(target instanceof Element)) return;
     const region = findProvinceElement(target);
-    if (!region?.id) return;
+    if (!region?.id || !Object.prototype.hasOwnProperty.call(provincesData, region.id)) return;
     onSelect(region.id);
   };
 
@@ -222,8 +222,8 @@ export function VietnamMap({
                 className="map-container flex h-full w-full items-center justify-center overflow-hidden bg-transparent"
                 dangerouslySetInnerHTML={{ __html: svgContent }}
                 onClick={(event) => chooseFromEventTarget(event.target)}
-                role="img"
-                aria-label="Bản đồ tương tác các tỉnh thành Việt Nam"
+                role="group"
+                aria-label="Bản đồ tương tác Việt Nam. Có thể chọn tỉnh bằng ô tìm kiếm phía trên."
               />
             </TransformComponent>
           </>

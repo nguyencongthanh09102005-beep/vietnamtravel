@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:api": "tsc --noEmit -p tsconfig.api.json",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:api": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node --test scripts/api-smoke.test.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.39.0",

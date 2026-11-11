@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, Clock, Info, MapPin, Utensils } from 'lucide-react';
+import { Camera, Clock, ExternalLink, Info, MapPin, Utensils } from 'lucide-react';
+import { createGoogleMapsSearchUrl } from '../../utils/googleMaps';
 import { provinceDetailsCatalog } from '../../data/provinceDetailsData';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
@@ -156,6 +157,15 @@ export function ProvinceDetails({ province }: { province: string }) {
                     <div className="p-4">
                       <h3 className="mb-1 font-semibold text-gray-900">{place.name}</h3>
                       <p className="line-clamp-2 text-sm text-gray-500">{place.description}</p>
+                      <a
+                        href={createGoogleMapsSearchUrl(`${place.name}, ${title}`)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 focus-visible:outline-none focus-visible:underline"
+                        aria-label={`Xem ${place.name} trên Google Maps (mở tab mới)`}
+                      >
+                        Xem trên Google Maps <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                      </a>
                     </div>
                   </article>
                 ))}

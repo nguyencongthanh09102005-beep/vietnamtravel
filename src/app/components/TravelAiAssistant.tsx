@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
+  Bookmark,
   ExternalLink,
   LoaderCircle,
   MapPinned,
@@ -29,6 +30,7 @@ interface ChatMessage {
   mapActions?: MapAction[];
   placeCards?: PlaceCard[];
   livePlaces?: boolean;
+  itinerary?: boolean;
 }
 
 interface ApiResponse {
@@ -51,6 +53,7 @@ interface TravelAiAssistantProps {
   open: boolean;
   onToggle: () => void;
   authenticated?: boolean;
+  onSaveItinerary?: (notes: string) => void;
 }
 
 function makeId() {
@@ -91,6 +94,7 @@ function parseStoredChats(value: unknown): Record<string, ChatMessage[]> {
           mapActions: Array.isArray(raw.mapActions) ? raw.mapActions.filter(isMapAction) : undefined,
           placeCards: Array.isArray(raw.placeCards) ? raw.placeCards.filter(isPlaceCard) : undefined,
           livePlaces: typeof raw.livePlaces === 'boolean' ? raw.livePlaces : undefined,
+          itinerary: typeof raw.itinerary === 'boolean' ? raw.itinerary : undefined,
         } satisfies ChatMessage;
       })
       .filter((message) => message.text)
@@ -166,11 +170,15 @@ export function TravelAiAssistant({
   open,
   onToggle,
   authenticated = false,
+  onSaveItinerary,
 }: TravelAiAssistantProps) {
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [messagesByProvince, setMessagesByProvince] = useState<Record<string, ChatMessage[]>>({});
-  const [storageHydrated, setStorageHydrated] = useState(!authenticated);
+  const [storageHydrated, setStorageHydrated] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'saving' | 'saved' | 'error'>('idle');
+  const [syncRetry, setSyncRetry] = useState(0);
+  const [saveRetry, setSaveRetry] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -182,48 +190,70 @@ export function TravelAiAssistant({
     let active = true;
 
     if (!authenticated) {
-      setStorageHydrated(true);
-      return () => {
-        active = false;
-      };
+      setStorageHydrated(false);
+      setSyncStatus('idle');
+      return () => { active = false; };
     }
 
     setStorageHydrated(false);
+    setSyncStatus('loading');
     const hydrate = async () => {
       try {
         const response = await fetch('/api/user-data', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Unable to load cloud history');
         const payload = (await response.json()) as UserDataResponse;
-        if (!active || !response.ok) return;
-        setMessagesByProvince(parseStoredChats(payload.data?.aiChats));
+        if (!active) return;
+
+        const cloud = parseStoredChats(payload.data?.aiChats);
+        // Keep messages typed locally while the cloud request was in flight.
+        setMessagesByProvince((previous) => {
+          const merged = { ...cloud };
+          for (const [id, local] of Object.entries(previous)) {
+            const unique = new Map<string, ChatMessage>();
+            for (const entry of [...(cloud[id] ?? []), ...local]) unique.set(entry.id, entry);
+            merged[id] = [...unique.values()].slice(-40);
+          }
+          return merged;
+        });
+        setStorageHydrated(true);
+        setSyncStatus('saved');
       } catch {
-        // Keep local chat if cloud data is temporarily unavailable.
-      } finally {
-        if (active) setStorageHydrated(true);
+        // Never send an empty/local-only history over cloud data after failed hydration.
+        if (active) setSyncStatus('error');
       }
     };
 
     void hydrate();
-    return () => {
-      active = false;
-    };
-  }, [authenticated]);
+    return () => { active = false; };
+  }, [authenticated, syncRetry]);
 
   useEffect(() => {
     if (!authenticated || !storageHydrated) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    let active = true;
 
+    setSyncStatus('saving');
     saveTimerRef.current = setTimeout(() => {
-      void fetch('/api/user-data', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aiChats: messagesByProvince }),
-      }).catch(() => undefined);
+      void (async () => {
+        try {
+          const response = await fetch('/api/user-data', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aiChats: messagesByProvince }),
+          });
+          if (!response.ok) throw new Error('Cloud save failed');
+          if (active) setSyncStatus('saved');
+        } catch {
+          if (active) setSyncStatus('error');
+        }
+      })();
     }, 800);
 
     return () => {
+      active = false;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [authenticated, messagesByProvince, storageHydrated]);
+  }, [authenticated, messagesByProvince, storageHydrated, saveRetry]);
 
   useEffect(() => {
     if (!province || messagesByProvince[province]) return;
@@ -301,6 +331,7 @@ export function TravelAiAssistant({
         mapActions: payload.mapActions?.length ? payload.mapActions : fallbackActions,
         placeCards: payload.placeCards?.filter(isPlaceCard),
         livePlaces: payload.livePlaces,
+        itinerary: response.ok && /lịch trình|[123] ngày|một ngày|hai ngày|ba ngày/i.test(text),
       };
 
       setMessagesByProvince((previous) => ({
@@ -353,12 +384,23 @@ export function TravelAiAssistant({
                   authenticated ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'
                 }`}
               >
-                {authenticated ? (storageHydrated ? 'Đã đồng bộ' : 'Đang đồng bộ') : 'Chế độ khách'}
+                {authenticated
+                  ? syncStatus === 'error' ? 'Đồng bộ lỗi' : syncStatus === 'saved' ? 'Đã đồng bộ' : 'Đang đồng bộ'
+                  : 'Chế độ khách'}
               </span>
             </div>
             <p className="truncate text-xs text-gray-500">
               {provinceName || 'Chọn một tỉnh để bắt đầu'}
             </p>
+            {authenticated && syncStatus === 'error' ? (
+              <button
+                type="button"
+                className="mt-1 text-xs font-semibold text-rose-700 underline"
+                onClick={() => storageHydrated ? setSaveRetry((n) => n + 1) : setSyncRetry((n) => n + 1)}
+              >
+                Đồng bộ thất bại · Thử lại
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -400,6 +442,17 @@ export function TravelAiAssistant({
                   >
                     {message.text}
                   </div>
+
+                  {message.role === 'assistant' && authenticated && message.itinerary && onSaveItinerary ? (
+                    <button
+                      type="button"
+                      onClick={() => onSaveItinerary(message.text)}
+                      className="mt-2 flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                    >
+                      <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
+                      Lưu lịch trình này
+                    </button>
+                  ) : null}
 
                   {message.role === 'assistant' && message.placeCards?.length ? (
                     <div className="mt-2 space-y-2">

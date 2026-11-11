@@ -152,6 +152,7 @@ async function searchGooglePlaces(query: string): Promise<GooglePlace[]> {
       'X-Goog-FieldMask':
         'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.googleMapsUri',
     },
+    signal: AbortSignal.timeout(6000),
     body: JSON.stringify({
       textQuery: query,
       pageSize: 5,
@@ -243,15 +244,21 @@ function geminiText(payload: GeminiPayload) {
   );
 }
 
-async function askGeminiWithModel(prompt: string, apiKey: string, model: string) {
+async function askGeminiWithModel(prompt: string, apiKey: string, model: string, deadline: number) {
   const maxAttempts = 2;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const timeLeft = deadline - Date.now();
+    if (timeLeft < 1000) return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.min(9000, timeLeft));
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: 'POST',
+          signal: controller.signal,
           headers: {
             'Content-Type': 'application/json',
             'x-goog-api-key': apiKey,
@@ -277,12 +284,14 @@ async function askGeminiWithModel(prompt: string, apiKey: string, model: string)
         return null;
       }
     } catch (error) {
-      console.error(`Gemini network error (${model}, attempt ${attempt + 1}/${maxAttempts}):`, error);
+      console.error(`Gemini network/timeout error (${model}, attempt ${attempt + 1}/${maxAttempts}):`, error);
       if (attempt === maxAttempts - 1) return null;
+    } finally {
+      clearTimeout(timeout);
     }
 
-    const delayMs = 700 * 2 ** attempt + Math.floor(Math.random() * 250);
-    await sleep(delayMs);
+    if (deadline - Date.now() < 1500) return null;
+    await sleep(700 * 2 ** attempt + Math.floor(Math.random() * 250));
   }
 
   return null;
@@ -292,12 +301,15 @@ async function askGemini(prompt: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
+  // Preserve time for the fallback model instead of allowing an indefinite request.
+  const deadline = Date.now() + 28000;
   const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
-  const fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.6-flash';
-  const models = [...new Set([primaryModel, fallbackModel, 'gemini-3.5-flash'])];
+  const fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.1-flash-lite';
+  const models = [...new Set([primaryModel, fallbackModel])];
 
   for (const model of models) {
-    const reply = await askGeminiWithModel(prompt, apiKey, model);
+    if (deadline - Date.now() < 1000) break;
+    const reply = await askGeminiWithModel(prompt, apiKey, model, deadline);
     if (reply) return reply;
     console.warn(`Gemini model ${model} failed; trying the next fallback model.`);
   }
@@ -318,8 +330,12 @@ export default {
       return json({ error: 'Dữ liệu gửi lên không hợp lệ.' }, { status: 400 });
     }
 
-    const provinceId = body.provinceId?.trim() ?? '';
-    const message = body.message?.trim().slice(0, 1600) ?? '';
+    if (!body || typeof body !== 'object' || Array.isArray(body) || JSON.stringify(body).length > 20000) {
+      return json({ error: 'Yêu cầu quá lớn hoặc không hợp lệ.' }, { status: 413 });
+    }
+
+    const provinceId = typeof body.provinceId === 'string' ? body.provinceId.trim() : '';
+    const message = typeof body.message === 'string' ? body.message.trim().slice(0, 1600) : '';
     const current = provinceDetailsCatalog[provinceId as keyof typeof provinceDetailsCatalog];
 
     if (!provinceId || !message || !current) {
@@ -351,7 +367,8 @@ export default {
       .map((item) => `- ${item.name}: ${item.description}`)
       .join('\n');
 
-    const history = (body.history ?? [])
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter((item): item is HistoryItem => Boolean(item && (item.role === 'user' || item.role === 'assistant') && typeof item.text === 'string'))
       .slice(-6)
       .map((item) => `${item.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${item.text.slice(0, 900)}`)
       .join('\n');

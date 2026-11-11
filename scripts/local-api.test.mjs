@@ -247,3 +247,46 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     else process.env.GEMINI_API_KEY = previousKey;
   }
 });
+
+
+test('day map API geocodes a specific landmark once and reuses the SQLite cache', async () => {
+  const originalFetch = globalThis.fetch;
+  let externalCalls = 0;
+  globalThis.fetch = async (input, init) => {
+    if (String(input).startsWith('https://nominatim.openstreetmap.org/search?')) {
+      externalCalls++;
+      return Response.json([{
+        lat: '16.061', lon: '108.227',
+        display_name: 'Cầu Rồng, Đà Nẵng, Việt Nam',
+        address: { country_code: 'vn', city: 'Đà Nẵng' },
+      }]);
+    }
+    return originalFetch(input, init);
+  };
+  const call = (stops) => fetch(base + '/api/itineraries/locations', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ provinceId: 'Da Nang', stops }),
+  });
+  try {
+    const invalid = await call([{ id: '../bad', title: 'Cầu Rồng', category: 'activities' }]);
+    assert.equal(invalid.status, 400);
+    const stop = { id: 'cau-rong', title: 'Cầu Rồng', category: 'activities' };
+    const fresh = await call([stop]);
+    assert.equal(fresh.status, 200);
+    const first = await fresh.json();
+    assert.equal(first.pending, false);
+    assert.equal(first.points.length, 1);
+    assert.equal(first.points[0].id, stop.id);
+    assert.equal(first.points[0].lat, 16.061);
+    const cached = await call([stop]);
+    assert.equal(cached.status, 200);
+    assert.equal((await cached.json()).points.length, 1);
+    assert.equal(externalCalls, 1, 'A cached location must not call the public geocoder twice');
+    const genericFood = await call([{ id: 'dish', title: 'Mì Quảng', category: 'food' }]);
+    assert.equal(genericFood.status, 200);
+    assert.deepEqual((await genericFood.json()).points, []);
+    assert.equal(externalCalls, 1, 'A generic dish is not a geographic location');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

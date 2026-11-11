@@ -52,3 +52,23 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+
+  windows-sqlite-integration:
+    name: Windows SQLite cleanup and local API
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Test local SQLite API and temp file cleanup
+        run: node --test scripts/local-api.test.mjs

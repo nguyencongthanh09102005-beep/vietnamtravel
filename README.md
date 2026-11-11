@@ -15,11 +15,23 @@ Truy cập địa chỉ Vite hiển thị, thường là http://localhost:5173. 
 
 Copy `.env.example` thành `.env` rồi điền **Gemini API key**. Có thể để trống toàn bộ mục Turso/Resend khi chỉ phát triển local. **Đừng commit file .env, .data hay token**.
 
+## AI Itinerary Planner (MVP)
+
+Chọn tỉnh trên bản đồ và nhấn **Lập lịch trình bằng AI** để tạo hành trình theo ngày, ngân sách, số người và phong cách du lịch. Ví dụ: **Đà Nẵng, 3 ngày, 2 người, 3.000.000đ, ưu tiên ẩm thực**.
+
+- Tạo lịch trình có cấu trúc theo các buổi trong ngày, xem lại từng ngày và tổng ngân sách cho cả nhóm.
+- Sửa tên, giờ, chi phí, loại hoạt động; thêm/xóa hoạt động và tạo lại riêng một ngày mà không ghi đè các ngày khác.
+- Đăng nhập để lưu/mở lại/cập nhật/xóa lịch trình vào bảng `travel_plans` của SQLite/Turso; bản nháp của khách không tự lưu.
+- Giá và vị trí chỉ là gợi ý ước tính; nút Google Maps chỉ mở **tìm kiếm** địa điểm, không khẳng định đã định tuyến.
+- Sử dụng chung Gemini API với chatbot hiện có, hạn thời gian và model dự phòng.
+
+**Tài liệu:** [AI Itinerary Planner — kiến trúc, JSON contract và QA](docs/AI_ITINERARY_PLANNER.md).
+
 ## Lưu trữ tài khoản
 
 - **Trên máy:** SQLite native của Node.js; tên, email, mật khẩu băm bằng `scrypt`, phiên đăng nhập HTTP-only và tỉnh/lịch trình/chat đều lưu ở `.data/vietnamtravel.sqlite`. Không cần dịch vụ bên ngoài để đăng ký/đăng nhập.
 - **Trên Vercel:** phải có database từ xa để lưu bền vững vì hệ thống file của Vercel Functions không tồn tại bền vững qua mỗi lần chạy. Chọn **Turso/libSQL** (dùng giao thức HTTPS v2) và thiết lập `TURSO_DATABASE_URL` cùng `TURSO_AUTH_TOKEN` trong Vercel → Project → Settings → Environment Variables. Không cần thêm npm dependency.
-- **Schema:** tự tạo khi kết nối lần đầu; không chạy SQL thủ công. Hệ thống sử dụng các bảng `users`, `sessions`, `user_travel_data`, `password_resets`, `rate_limits`.
+- **Schema:** tự tạo khi kết nối lần đầu; không chạy SQL thủ công. Hệ thống sử dụng các bảng `users`, `sessions`, `user_travel_data`, `travel_plans`, `password_resets`, `rate_limits`.
 - **Bảo mật:** mật khẩu lưu bằng scrypt với salt riêng, token đăng nhập chỉ lưu hash SHA-256 trong database, cookie HttpOnly/SameSite=Lax/Secure trên Vercel; có giới hạn thử đăng nhập/đăng ký và email khôi phục. Không trả mật khẩu hay token session trong JSON.
 - **Quên mật khẩu:** nếu muốn gửi email đặt lại, cấu hình `RESEND_API_KEY`, `AUTH_EMAIL_FROM` và `AUTH_PUBLIC_URL` (URL domain website). Nếu chưa cấu hình dịch vụ email, đăng nhập và đăng ký vẫn hoạt động nhưng nút quên mật khẩu sẽ báo chưa sẵn sàng.
 

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bookmark, LoaderCircle, Search, Share2 } from 'lucide-react';
+import { Bookmark, LoaderCircle, Search, Share2, WandSparkles } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { ProvinceDetails } from './components/ProvinceDetails';
 import { TravelAiAssistant } from './components/TravelAiAssistant';
 import { TravelCollections } from './components/TravelCollections';
+import { AiItineraryPlanner } from './components/AiItineraryPlanner';
 import { UserMenu } from './components/UserMenu';
 import { VietnamMap } from './components/VietnamMap';
 import { provincesData } from '../data/provincesData';
@@ -36,6 +37,7 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [guestMode, setGuestMode] = useState(false);
   const [collectionsOpen, setCollectionsOpen] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
   const [pendingItinerary, setPendingItinerary] = useState<{ provinceId: string; notes: string } | null>(null);
 
   useEffect(() => {
@@ -120,6 +122,7 @@ export default function App() {
       setGuestMode(false);
       setAiOpen(false);
       setCollectionsOpen(false);
+      setPlannerOpen(false);
       setPendingItinerary(null);
     }
   };
@@ -273,6 +276,15 @@ export default function App() {
                 </div>
               </div>
               <p role="status" aria-live="polite" className="text-xs text-emerald-700">{shareMessage}</p>
+              <button
+                type="button"
+                disabled={!selectedProvince}
+                onClick={() => setPlannerOpen(true)}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-700 to-sky-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:from-emerald-800 hover:to-sky-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <WandSparkles className="h-4 w-4" aria-hidden="true"/>
+                Lập lịch trình bằng AI
+              </button>
 
               <label htmlFor="province-search" className="sr-only">
                 Tìm tỉnh thành
@@ -382,6 +394,12 @@ export default function App() {
   return (
     <>
       <AnimatePresence mode="wait">{content}</AnimatePresence>
+      <AiItineraryPlanner
+        open={plannerOpen}
+        provinceId={selectedProvince}
+        authenticated={Boolean(user)}
+        onClose={() => setPlannerOpen(false)}
+      />
       {user && <TravelCollections
         open={collectionsOpen}
         selectedProvince={selectedProvince}

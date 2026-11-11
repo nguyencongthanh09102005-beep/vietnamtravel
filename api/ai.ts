@@ -6,6 +6,7 @@ import {
   type MapAction,
   type PlaceCard,
 } from '../src/utils/googleMaps.js';
+import { generateGeminiText } from './_lib/gemini.js';
 
 interface HistoryItem {
   role: 'user' | 'assistant';
@@ -25,12 +26,6 @@ interface GooglePlace {
   rating?: number;
   userRatingCount?: number;
   googleMapsUri?: string;
-}
-
-interface GeminiPayload {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
-  }>;
 }
 
 function json(data: unknown, init: ResponseInit = {}) {
@@ -227,95 +222,6 @@ function placeCards(places: GooglePlace[]): PlaceCard[] {
     });
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isTransientGeminiStatus(status: number) {
-  return status === 408 || status === 429 || status >= 500;
-}
-
-function geminiText(payload: GeminiPayload) {
-  return (
-    payload.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? '')
-      .join('')
-      .trim() || null
-  );
-}
-
-async function askGeminiWithModel(prompt: string, apiKey: string, model: string, deadline: number) {
-  const maxAttempts = 2;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const timeLeft = deadline - Date.now();
-    if (timeLeft < 1000) return null;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Math.min(9000, timeLeft));
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: 'POST',
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey,
-          },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          }),
-        },
-      );
-
-      if (response.ok) {
-        return geminiText((await response.json()) as GeminiPayload);
-      }
-
-      const errorText = await response.text();
-      console.error(
-        `Gemini API error (${model}, attempt ${attempt + 1}/${maxAttempts}):`,
-        response.status,
-        errorText.slice(0, 500),
-      );
-
-      if (!isTransientGeminiStatus(response.status) || attempt === maxAttempts - 1) {
-        return null;
-      }
-    } catch (error) {
-      console.error(`Gemini network/timeout error (${model}, attempt ${attempt + 1}/${maxAttempts}):`, error);
-      if (attempt === maxAttempts - 1) return null;
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (deadline - Date.now() < 1500) return null;
-    await sleep(700 * 2 ** attempt + Math.floor(Math.random() * 250));
-  }
-
-  return null;
-}
-
-async function askGemini(prompt: string) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
-
-  // Preserve time for the fallback model instead of allowing an indefinite request.
-  const deadline = Date.now() + 28000;
-  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
-  const fallbackModel = process.env.GEMINI_FALLBACK_MODEL || 'gemini-3.1-flash-lite';
-  const models = [...new Set([primaryModel, fallbackModel])];
-
-  for (const model of models) {
-    if (deadline - Date.now() < 1000) break;
-    const reply = await askGeminiWithModel(prompt, apiKey, model, deadline);
-    if (reply) return reply;
-    console.warn(`Gemini model ${model} failed; trying the next fallback model.`);
-  }
-
-  return null;
-}
 
 export default {
   async fetch(request: Request) {
@@ -375,7 +281,7 @@ export default {
 
     const prompt = `Bạn là trợ lý du lịch bên trong website Vietnam Travel.\n\nQUY TẮC CỨNG:\n1. Tỉnh đang chọn là: ${provinceName} (id: ${provinceId}). Chỉ trả lời về địa điểm, ẩm thực, lịch trình, cách di chuyển và thông tin du lịch thuộc tỉnh/thành này.\n2. Không chuyển sang tư vấn tỉnh/thành khác dù người dùng yêu cầu. Nếu câu hỏi nằm ngoài phạm vi, nhắc họ đổi tỉnh trên bản đồ.\n3. Trả lời bằng tiếng Việt, tự nhiên, gọn, dễ đọc. Ưu tiên gợi ý thực tế theo buổi sáng/trưa/chiều/tối khi lập lịch trình.\n4. Không bịa giờ mở cửa, giá vé, khoảng cách, rating hay trạng thái hoạt động. Chỉ dùng rating/địa chỉ khi chúng xuất hiện trong dữ liệu Google Places bên dưới.\n5. Khi tư vấn đường đi, mô tả hướng di chuyển ở mức tổng quát và nhắc người dùng dùng nút Google Maps để có chỉ dẫn thời gian thực.\n6. Nếu dữ liệu dự án và Google Places khác nhau, ưu tiên Google Places cho quán/địa điểm đang hoạt động nhưng vẫn nói theo hướng tham khảo.\n7. Nếu người dùng hỏi quán ăn, món ăn, cà phê hoặc địa điểm cụ thể và có dữ liệu Google Places, chỉ gợi ý tên quán/địa điểm có trong danh sách Google Places. Không tự bịa thêm cơ sở hay địa chỉ. Card chi tiết và nút Google Maps sẽ được giao diện hiển thị bên dưới câu trả lời, nên phần trả lời chỉ cần giải thích ngắn gọn vì sao đáng thử/đáng đến.\n\nDỮ LIỆU NỘI BỘ VỀ ${provinceName}:\n${current.data.overview.description}\n\nĐịa điểm trong dự án:\n${localPlaces || '- Chưa có dữ liệu.'}\n\nẨm thực trong dự án:\n${localCuisine || '- Chưa có dữ liệu.'}\n\nDỮ LIỆU GOOGLE PLACES TRỰC TIẾP (nếu có):\n${livePlacesAsContext(livePlaces)}\n\nLỊCH SỬ CHAT GẦN NHẤT:\n${history || '(chưa có)'}\n\nCÂU HỎI HIỆN TẠI:\n${message}\n\nHãy trả lời tối đa khoảng 350 từ. Không dùng markdown table.`;
 
-    const reply = await askGemini(prompt);
+    const reply = await generateGeminiText(prompt, { signal: request.signal });
 
     if (!reply) {
       return json(

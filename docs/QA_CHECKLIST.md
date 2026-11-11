@@ -1,12 +1,14 @@
 # VietnamTravel — checklist kiểm thử trước khi merge
 
-> Dành cho PR #2. Các mục bên dưới là các **ca cần kiểm thử thủ công**, không phải kết quả PASS. CI chỉ kiểm tra typecheck, dữ liệu ảnh, hành vi API mô phỏng và production build.
+> Cập nhật cho PR #4 (chuyển sang SQLite + Turso). Các mục bên dưới là các **ca cần kiểm thử thủ công**, không phải kết quả PASS. CI chỉ kiểm tra typecheck, dữ liệu ảnh, hành vi API mô phỏng và production build.
 
 ## Môi trường
 
 - [ ] Mở Preview Deployment từ PR trên điện thoại và máy tính (không dùng production/main).
-- [ ] Vercel Preview có \`GEMINI_API_KEY\`, \`GEMINI_MODEL\`, \`GEMINI_FALLBACK_MODEL\`, \`SUPABASE_URL\`, \`SUPABASE_ANON_KEY\`; chỉ cấu hình \`GOOGLE_MAPS_API_KEY\` nếu dùng Google Places.
-- [ ] Supabase đã chạy \`supabase/schema.sql\`; trong Auth → URL Configuration đã allowlist domain preview và production cho email recovery.
+- [ ] Local `npm run dev` không cần Supabase/Turso; tự tạo SQLite ở `.data/`.
+- [ ] Vercel Preview có `GEMINI_API_KEY`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`; tùy chọn `GOOGLE_MAPS_API_KEY`.
+- [ ] Turso database đã tạo và cấp token riêng, bảng được tự khởi tạo khi lần đầu đăng ký.
+- [ ] Nếu thử khôi phục mật khẩu, cấu hình `RESEND_API_KEY`, `AUTH_EMAIL_FROM`, `AUTH_PUBLIC_URL` và domain đã xác minh.
 
 ## Bản đồ, tìm kiếm, liên kết
 
@@ -19,17 +21,18 @@
 
 ## Tài khoản
 
-- [ ] Đăng ký, xác thực email nếu được yêu cầu, đăng nhập, đăng xuất; kiểm tra session sau khi làm mới trang.
+- [ ] Đăng ký tài khoản mới vào SQLite local; đăng nhập, đăng xuất; làm mới trang phải giữ session.
+- [ ] Thử tương tự trên Vercel Preview với Turso; thông tin lưu khi chạy trên một serverless instance phải đọc được trên phiên khác.
 - [ ] Đổi tên hiển thị, thêm URL avatar HTTPS, làm mới trang: dữ liệu vẫn còn. URL không hợp lệ phải bị từ chối.
-- [ ] Nhấn "Quên mật khẩu?", yêu cầu email recovery, mở link trên trình duyệt chưa đăng nhập, đặt mật khẩu mới rồi đăng nhập.
+- [ ] Với Resend cấu hình đầy đủ, gửi email khôi phục và dùng token 20 phút để đặt lại mật khẩu.
 - [ ] Mở link recovery trong lúc đang đăng nhập: vẫn hiện form đặt lại mật khẩu; không còn token trong URL bar.
-- [ ] Thử link reset đã hết hạn và mật khẩu ngắn: phải có lỗi rõ ràng.
+- [ ] Thử link reset đã hết hạn, dùng lại token và mật khẩu ngắn: phải có lỗi rõ ràng, session cũ bị thu hồi sau reset.
 - [ ] Chế độ khách không được truy cập dữ liệu cá nhân.
 
 ## Hành trình của tôi
 
 - [ ] Lưu/bỏ yêu thích Hà Nội, đánh dấu/huỷ đánh dấu Đồng Tháp đã đi.
-- [ ] Làm mới trình duyệt và đăng nhập máy thứ hai: tỉnh lưu/đã đi vẫn đúng.
+- [ ] Local: làm mới trình duyệt giữ dữ liệu SQLite; online: đăng nhập máy thứ hai đọc được cùng dữ liệu Turso.
 - [ ] Tạo lịch trình thủ công, sửa tiêu đề/nội dung, xóa (có xác nhận); kiểm tra giới hạn 50 lịch trình.
 - [ ] Yêu cầu AI gợi ý lịch trình và nhấn "Lưu lịch trình này": form được điền bằng phản hồi AI; lưu và xem lại.
 - [ ] Tắt kết nối mạng trước khi mở bộ sưu tập: không được ghi đè dữ liệu cloud bằng danh sách rỗng.
@@ -58,3 +61,11 @@
 - Avatar hiện hỗ trợ **URL HTTPS**, chưa có thao tác tải ảnh từ máy lên Storage.
 - Chưa có bộ E2E trình duyệt tự động và chưa có kết quả Lighthouse thực tế.
 - Dữ liệu số liệu dân số/giá vé/giờ mở cửa thay đổi theo thời gian cần kiểm chứng trước mục đích thương mại.
+
+## Chuyển database
+
+- [ ] Xác nhận `.data/*.sqlite*` đã nằm trong `.gitignore`, không xuất hiện trong git status.
+- [ ] Không còn API gọi tới Supabase; biến `SUPABASE_*` không còn được dùng.
+- [ ] Test đăng ký một user mới khi chưa có file SQLite trên máy; tự tạo schema.
+- [ ] Chạy `npm run test:api`, `node --test scripts/local-api.test.mjs` và `npm run build`.
+- [ ] Trước khi đóng Supabase cũ, xuất dữ liệu người dùng cần giữ nếu có; tài khoản/mật khẩu cũ không chuyển tự động.

@@ -1,76 +1,31 @@
-import {
-  appendCookies,
-  authCookies,
-  getSupabaseConfig,
-  supabaseAuthFetch,
-  toPublicUser,
-} from '../_lib/supabase.js';
-
-interface LoginBody {
-  email?: string;
-  password?: string;
-}
-
-interface LoginPayload {
-  access_token?: string;
-  refresh_token?: string;
-  expires_in?: number;
-  user?: {
-    id: string;
-    email?: string;
-    created_at?: string;
-    user_metadata?: { full_name?: string; avatar_url?: string };
-  };
-  error_description?: string;
-  msg?: string;
-}
-
-function json(data: unknown, status = 200, cookies: string[] = []) {
-  const headers = new Headers({ 'Cache-Control': 'no-store' });
-  appendCookies(headers, cookies);
-  return Response.json(data, { status, headers });
-}
+import { createSession, dbOne, hashPassword, json, normalizeEmail, publicUser, sessionCookie, validEmail, verifyPassword, withinRateLimit } from '../_lib/auth.js';
 
 export default {
   async fetch(request: Request) {
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+    let body: { email?: unknown; password?: unknown };
+    try { body = await request.json(); }
+    catch { return json({ error: 'Dữ liệu đăng nhập không hợp lệ.' }, 400); }
 
-    const config = getSupabaseConfig();
-    if (!config.configured) {
-      return json({ error: 'Hệ thống tài khoản chưa được kết nối database trên Vercel.' }, 503);
-    }
-
-    let body: LoginBody;
-    try {
-      body = (await request.json()) as LoginBody;
-    } catch {
-      return json({ error: 'Dữ liệu đăng nhập không hợp lệ.' }, 400);
-    }
-
-    const email = body.email?.trim().toLowerCase() ?? '';
-    const password = body.password ?? '';
-    if (!email || !password) return json({ error: 'Hãy nhập email và mật khẩu.' }, 400);
+    const email = normalizeEmail(body?.email);
+    const password = typeof body?.password === 'string' ? body.password : '';
+    if (!validEmail(email) || !password || password.length > 128) return json({ error: 'Hãy nhập email và mật khẩu hợp lệ.' }, 400);
 
     try {
-      const response = await supabaseAuthFetch('/auth/v1/token?grant_type=password', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      const payload = (await response.json()) as LoginPayload;
-
-      if (!response.ok || !payload.user || !payload.access_token || !payload.refresh_token) {
-        const message = payload.error_description || payload.msg || 'Email hoặc mật khẩu chưa đúng.';
-        return json({ error: message }, response.status >= 400 ? response.status : 401);
+      if (!await withinRateLimit(request, 'login', email, 10, 15 * 60)) {
+        return json({ error: 'Thử đăng nhập quá nhiều lần. Hãy thử lại sau 15 phút.' }, 429);
       }
-
-      return json(
-        { user: toPublicUser(payload.user) },
-        200,
-        authCookies(payload),
-      );
+      const row = await dbOne('SELECT * FROM users WHERE email=?', [email]);
+      // Perform an equally expensive hash on unknown users to reduce timing leaks.
+      const valid = row
+        ? await verifyPassword(password, String(row.password_hash))
+        : (await hashPassword(password), false);
+      if (!valid || !row) return json({ error: 'Email hoặc mật khẩu chưa đúng.' }, 401);
+      const token = await createSession(String(row.id));
+      return json({ user: publicUser(row) }, 200, [sessionCookie(token)]);
     } catch (error) {
-      console.error('Supabase login connection failed:', error);
-      return json({ error: 'Không kết nối được Supabase. Hãy kiểm tra URL dự án và mạng rồi thử lại.' }, 502);
+      console.error('[auth/login] database error:', error);
+      return json({ error: 'Không kết nối được database tài khoản. Hãy kiểm tra cấu hình.' }, 503);
     }
   },
 };

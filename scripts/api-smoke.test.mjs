@@ -10,8 +10,6 @@ const originalEnv = {
   GEMINI_MODEL: process.env.GEMINI_MODEL,
   GEMINI_FALLBACK_MODEL: process.env.GEMINI_FALLBACK_MODEL,
   GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY,
-  SUPABASE_URL: process.env.SUPABASE_URL,
-  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
 };
 
 after(() => {
@@ -27,8 +25,6 @@ beforeEach(() => {
   process.env.GEMINI_MODEL = 'gemini-3.5-flash-lite';
   process.env.GEMINI_FALLBACK_MODEL = 'gemini-3.1-flash-lite';
   delete process.env.GOOGLE_MAPS_API_KEY;
-  delete process.env.SUPABASE_URL;
-  delete process.env.SUPABASE_ANON_KEY;
   globalThis.fetch = async () => { throw new Error('Unexpected network call'); };
 });
 
@@ -77,9 +73,9 @@ test('AI returns a normal answer and safe map links with mocked provider', async
   assert.ok(payload.mapActions.every((item) => item.url.startsWith('https://www.google.com/maps/')));
 });
 
-test('password recovery rejects malformed addresses without contacting Supabase', async () => {
-  process.env.SUPABASE_URL = 'https://example.supabase.co';
-  process.env.SUPABASE_ANON_KEY = 'test-key';
+test('password recovery rejects malformed addresses without contacting the email provider', async () => {
+  process.env.RESEND_API_KEY = 'test-key';
+  process.env.AUTH_EMAIL_FROM = 'tester@example.test';
   const response = await recover.fetch(new Request('https://example.test/api/auth/recover', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -89,8 +85,8 @@ test('password recovery rejects malformed addresses without contacting Supabase'
 });
 
 test('travel user data rejects requests without a valid session', async () => {
-  process.env.SUPABASE_URL = 'https://example.supabase.co';
-  process.env.SUPABASE_ANON_KEY = 'test-key';
+  process.env.TURSO_DATABASE_URL = '';
+  process.env.TURSO_AUTH_TOKEN = '';
   const response = await userData.fetch(new Request('https://example.test/api/user-data'));
   assert.equal(response.status, 401);
 });

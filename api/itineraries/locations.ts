@@ -40,6 +40,7 @@ async function lookupPlace(title: string, province: string): Promise<GeoEntry> {
   const params = new URLSearchParams({
     q: title + ', ' + province + ', Việt Nam',
     format: 'jsonv2', addressdetails: '1', countrycodes: 'vn', limit: '3',
+    'accept-language': 'vi',
   });
   const result = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
     headers: {

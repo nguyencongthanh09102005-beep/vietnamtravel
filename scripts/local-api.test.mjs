@@ -21,7 +21,15 @@ if (!addr || typeof addr === 'string') throw new Error('Missing local Vite serve
 const base = 'http://127.0.0.1:' + addr.port;
 
 after(async () => {
-  await server.close();
+  // Native DatabaseSync retains an open handle after Vite's request handler
+  // finishes. On Windows that handle must be closed before deleting temp DB.
+  // Load the same SSR module instance used by the local API middleware.
+  try {
+    const { closeLocalDatabase } = await server.ssrLoadModule('/api/_lib/database.ts');
+    closeLocalDatabase();
+  } finally {
+    await server.close();
+  }
   rmSync(tempFolder, { recursive: true, force: true });
 });
 

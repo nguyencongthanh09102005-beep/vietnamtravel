@@ -5,6 +5,7 @@ import {
   Sparkles, Trash2, WandSparkles, X,
 } from 'lucide-react';
 import { provincesData, type ProvinceId } from '../../data/provincesData';
+import { ItineraryDayMap } from './ItineraryDayMap';
 import {
   recalculatePlan,
   type ItineraryDay,
@@ -525,6 +526,15 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
                       <RefreshCw className="h-3.5 w-3.5"/> Tạo lại ngày này
                     </button>
                   </div>
+                  {currentDay ? (
+                    <div className="mb-4">
+                      <ItineraryDayMap
+                        provinceId={plan.provinceId}
+                        provinceName={provincesData[plan.provinceId].name}
+                        stops={currentDay.stops}
+                      />
+                    </div>
+                  ) : null}
                   <div className="space-y-3">
                     {currentDay?.stops.map(stop => (
                       <article key={stop.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">

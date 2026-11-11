@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, LogIn, LogOut, UserRound } from 'lucide-react';
+import { Bookmark, ChevronDown, LogIn, LogOut, UserRound } from 'lucide-react';
 import type { AuthUser } from '../../types/auth';
 
 interface UserMenuProps {
@@ -7,6 +7,7 @@ interface UserMenuProps {
   guest: boolean;
   onLogout: () => Promise<void> | void;
   onOpenAuth: () => void;
+  onOpenCollections: () => void;
 }
 
 function initials(user: AuthUser) {
@@ -19,7 +20,7 @@ function initials(user: AuthUser) {
     .join('');
 }
 
-export function UserMenu({ user, guest, onLogout, onOpenAuth }: UserMenuProps) {
+export function UserMenu({ user, guest, onLogout, onOpenAuth, onOpenCollections }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -69,8 +70,20 @@ export function UserMenu({ user, guest, onLogout, onOpenAuth }: UserMenuProps) {
           <div className="rounded-xl bg-gray-50 px-3 py-3">
             <p className="text-sm font-bold text-gray-900">{user.displayName}</p>
             <p className="mt-0.5 truncate text-xs text-gray-500">{user.email}</p>
-            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Dữ liệu đang đồng bộ</p>
+            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Lịch sử và hành trình cá nhân</p>
           </div>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onOpenCollections();
+            }}
+            className="mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-sky-50"
+          >
+            <Bookmark className="h-4 w-4" aria-hidden="true" />
+            Hành trình của tôi
+          </button>
           <button
             type="button"
             role="menuitem"

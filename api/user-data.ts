@@ -1,3 +1,4 @@
+import { provincesData } from '../src/data/provincesData.js';
 import {
   appendCookies,
   getRequestAuthSession,
@@ -37,7 +38,25 @@ function toClientData(row?: StoredTravelData) {
 
 function cleanStringArray(value: unknown) {
   if (!Array.isArray(value)) return undefined;
-  return [...new Set(value.filter((item): item is string => typeof item === 'string').map((item) => item.slice(0, 80)))].slice(0, 100);
+  const valid = new Set<string>(Object.keys(provincesData));
+  return [...new Set(value.filter((item): item is string => typeof item === 'string' && valid.has(item)))].slice(0, 36);
+}
+
+function cleanItineraries(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  const valid = new Set<string>(Object.keys(provincesData));
+  return value.filter((entry) => entry && typeof entry === 'object'
+    && typeof entry.id === 'string' && entry.id.length <= 120
+    && typeof entry.provinceId === 'string' && valid.has(entry.provinceId)
+    && typeof entry.title === 'string' && entry.title.trim().length > 0
+    && typeof entry.notes === 'string' && entry.notes.trim().length > 0
+  ).slice(-50).map((entry) => ({
+    id: entry.id,
+    provinceId: entry.provinceId,
+    title: entry.title.slice(0, 120),
+    notes: entry.notes.slice(0, 12000),
+    createdAt: typeof entry.createdAt === 'string' ? entry.createdAt.slice(0, 40) : new Date().toISOString(),
+  }));
 }
 
 function cleanAiChats(value: unknown) {
@@ -96,7 +115,7 @@ export default {
     const savedProvinces = cleanStringArray(body.savedProvinces);
     const visitedProvinces = cleanStringArray(body.visitedProvinces);
     const aiChats = cleanAiChats(body.aiChats);
-    const itineraries = Array.isArray(body.itineraries) ? body.itineraries.slice(-50) : undefined;
+    const itineraries = cleanItineraries(body.itineraries);
 
     const databaseRow: Record<string, unknown> = {
       user_id: session.user.id,

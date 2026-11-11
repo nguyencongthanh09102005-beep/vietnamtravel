@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LoaderCircle, Search } from 'lucide-react';
+import { Bookmark, LoaderCircle, Search } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { ProvinceDetails } from './components/ProvinceDetails';
 import { TravelAiAssistant } from './components/TravelAiAssistant';
+import { TravelCollections } from './components/TravelCollections';
 import { UserMenu } from './components/UserMenu';
 import { VietnamMap } from './components/VietnamMap';
 import { provincesData } from '../data/provincesData';
@@ -19,6 +20,8 @@ export default function App() {
   const [authConfigured, setAuthConfigured] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [guestMode, setGuestMode] = useState(false);
+  const [collectionsOpen, setCollectionsOpen] = useState(false);
+  const [pendingItinerary, setPendingItinerary] = useState<{ provinceId: string; notes: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -71,6 +74,8 @@ export default function App() {
       setUser(null);
       setGuestMode(false);
       setAiOpen(false);
+      setCollectionsOpen(false);
+      setPendingItinerary(null);
     }
   };
 
@@ -190,12 +195,25 @@ export default function App() {
                   </p>
                 </div>
 
-                <UserMenu
-                  user={user}
-                  guest={guestMode}
-                  onLogout={logout}
-                  onOpenAuth={openAuth}
-                />
+                <div className="flex shrink-0 items-center gap-2">
+                  {user && (
+                    <button
+                      type="button"
+                      aria-label="Mở hành trình của tôi"
+                      onClick={() => setCollectionsOpen(true)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-slate-700 hover:bg-sky-50"
+                    >
+                      <Bookmark className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                  <UserMenu
+                    user={user}
+                    guest={guestMode}
+                    onLogout={logout}
+                    onOpenAuth={openAuth}
+                    onOpenCollections={() => setCollectionsOpen(true)}
+                  />
+                </div>
               </div>
 
               <label htmlFor="province-search" className="sr-only">
@@ -271,6 +289,10 @@ export default function App() {
                 open={aiOpen}
                 onToggle={() => setAiOpen((value) => !value)}
                 authenticated={Boolean(user)}
+                onSaveItinerary={(notes) => {
+                  setPendingItinerary({ provinceId: selectedProvince, notes });
+                  setCollectionsOpen(true);
+                }}
               />
             </div>
           </section>
@@ -279,5 +301,17 @@ export default function App() {
     );
   }
 
-  return <AnimatePresence mode="wait">{content}</AnimatePresence>;
+  return (
+    <>
+      <AnimatePresence mode="wait">{content}</AnimatePresence>
+      {user && <TravelCollections
+        open={collectionsOpen}
+        selectedProvince={selectedProvince}
+        onClose={() => setCollectionsOpen(false)}
+        onSelectProvince={selectProvince}
+        draftItinerary={pendingItinerary}
+        onDraftConsumed={() => setPendingItinerary(null)}
+      />}
+    </>
+  );
 }

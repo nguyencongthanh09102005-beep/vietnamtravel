@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
+  Bookmark,
   ExternalLink,
   LoaderCircle,
   MapPinned,
@@ -29,6 +30,7 @@ interface ChatMessage {
   mapActions?: MapAction[];
   placeCards?: PlaceCard[];
   livePlaces?: boolean;
+  itinerary?: boolean;
 }
 
 interface ApiResponse {
@@ -51,6 +53,7 @@ interface TravelAiAssistantProps {
   open: boolean;
   onToggle: () => void;
   authenticated?: boolean;
+  onSaveItinerary?: (notes: string) => void;
 }
 
 function makeId() {
@@ -91,6 +94,7 @@ function parseStoredChats(value: unknown): Record<string, ChatMessage[]> {
           mapActions: Array.isArray(raw.mapActions) ? raw.mapActions.filter(isMapAction) : undefined,
           placeCards: Array.isArray(raw.placeCards) ? raw.placeCards.filter(isPlaceCard) : undefined,
           livePlaces: typeof raw.livePlaces === 'boolean' ? raw.livePlaces : undefined,
+          itinerary: typeof raw.itinerary === 'boolean' ? raw.itinerary : undefined,
         } satisfies ChatMessage;
       })
       .filter((message) => message.text)
@@ -166,6 +170,7 @@ export function TravelAiAssistant({
   open,
   onToggle,
   authenticated = false,
+  onSaveItinerary,
 }: TravelAiAssistantProps) {
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(false);
@@ -326,6 +331,7 @@ export function TravelAiAssistant({
         mapActions: payload.mapActions?.length ? payload.mapActions : fallbackActions,
         placeCards: payload.placeCards?.filter(isPlaceCard),
         livePlaces: payload.livePlaces,
+        itinerary: response.ok && /lịch trình|[123] ngày|một ngày|hai ngày|ba ngày/i.test(text),
       };
 
       setMessagesByProvince((previous) => ({
@@ -436,6 +442,17 @@ export function TravelAiAssistant({
                   >
                     {message.text}
                   </div>
+
+                  {message.role === 'assistant' && authenticated && message.itinerary && onSaveItinerary ? (
+                    <button
+                      type="button"
+                      onClick={() => onSaveItinerary(message.text)}
+                      className="mt-2 flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+                    >
+                      <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
+                      Lưu lịch trình này
+                    </button>
+                  ) : null}
 
                   {message.role === 'assistant' && message.placeCards?.length ? (
                     <div className="mt-2 space-y-2">

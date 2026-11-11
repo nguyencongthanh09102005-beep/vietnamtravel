@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bookmark, LoaderCircle, Search } from 'lucide-react';
+import { Bookmark, LoaderCircle, Search, Share2 } from 'lucide-react';
 import { AuthScreen } from './components/AuthScreen';
 import { ProvinceDetails } from './components/ProvinceDetails';
 import { TravelAiAssistant } from './components/TravelAiAssistant';
@@ -11,10 +11,17 @@ import { provincesData } from '../data/provincesData';
 import type { AuthStateResponse, AuthUser } from '../types/auth';
 import { normalizeSearchText } from '../utils/text';
 
+function getProvinceFromUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const id = new URLSearchParams(window.location.search).get('province') ?? '';
+  return Object.prototype.hasOwnProperty.call(provincesData, id) ? id : '';
+}
+
 export default function App() {
-  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedProvince, setSelectedProvince] = useState(getProvinceFromUrl);
   const [keyword, setKeyword] = useState('');
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(() => Boolean(getProvinceFromUrl()));
+  const [shareMessage, setShareMessage] = useState('');
   const [aiOpen, setAiOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authConfigured, setAuthConfigured] = useState(false);
@@ -48,6 +55,16 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const onNavigate = () => {
+      const id = getProvinceFromUrl();
+      setSelectedProvince(id);
+      if (id) setStarted(true);
+    };
+    window.addEventListener('popstate', onNavigate);
+    return () => window.removeEventListener('popstate', onNavigate);
+  }, []);
+
   const provinces = useMemo(
     () => Object.keys(provincesData) as Array<keyof typeof provincesData>,
     [],
@@ -63,8 +80,27 @@ export default function App() {
   }, [keyword, provinces]);
 
   const selectProvince = (province: string) => {
+    if (!Object.prototype.hasOwnProperty.call(provincesData, province)) return;
     setSelectedProvince(province);
     setKeyword('');
+    setShareMessage('');
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('province') !== province) {
+      url.searchParams.set('province', province);
+      window.history.pushState({}, '', url);
+    }
+  };
+
+  const shareProvince = async () => {
+    if (!selectedProvince) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('province', selectedProvince);
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setShareMessage('Đã sao chép liên kết');
+    } catch {
+      setShareMessage('Không sao chép được liên kết');
+    }
   };
 
   const logout = async () => {
@@ -196,6 +232,16 @@ export default function App() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!selectedProvince}
+                    aria-label="Sao chép liên kết chia sẻ tỉnh đang chọn"
+                    title="Chia sẻ tỉnh đang chọn"
+                    onClick={() => void shareProvince()}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-slate-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
                   {user && (
                     <button
                       type="button"
@@ -215,6 +261,7 @@ export default function App() {
                   />
                 </div>
               </div>
+              <p role="status" aria-live="polite" className="text-xs text-emerald-700">{shareMessage}</p>
 
               <label htmlFor="province-search" className="sr-only">
                 Tìm tỉnh thành

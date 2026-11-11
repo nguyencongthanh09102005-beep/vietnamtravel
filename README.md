@@ -20,6 +20,9 @@ Vietnam Travel là ứng dụng web tương tác giúp người dùng khám phá
 - Dữ liệu hành chính của các đơn vị hình thành sau sắp xếp năm 2025 có nguồn tham khảo chính thức ngay trong giao diện.
 - Giao diện responsive cho desktop và thiết bị di động.
 - Có loading/error state cho bản đồ và fallback khi hình ảnh bị lỗi.
+- Lưu tỉnh yêu thích, đánh dấu đã đi và quản lý lịch trình trong mục **Hành trình của tôi**.
+- Lưu lịch trình từ câu trả lời AI vào tài khoản đã đăng nhập.
+- URL `?province=Ha%20Noi` để chia sẻ trực tiếp tỉnh đang chọn; hỗ trợ Back/Forward.
 - Có TypeScript strict checking cho frontend và API Functions trong GitHub Actions.
 
 ## Công nghệ
@@ -109,7 +112,7 @@ Trên Vercel Project → Settings → Environment Variables:
 
 ```text
 GEMINI_API_KEY=<Gemini API key>
-GEMINI_MODEL=gemini-3.7-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 GOOGLE_MAPS_API_KEY=<Google Maps Platform API key, tùy chọn>
 SUPABASE_URL=<Supabase project URL>
 SUPABASE_ANON_KEY=<Supabase anon/public key>
@@ -158,10 +161,10 @@ Trong Vercel Project → Settings → Environment Variables, thêm:
 
 ```text
 GEMINI_API_KEY=<Gemini API key của bạn>
-GEMINI_MODEL=gemini-3.7-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
-`GEMINI_MODEL` là tùy chọn. Nếu không khai báo, backend dùng `gemini-3.7-flash`.
+`GEMINI_MODEL` là tùy chọn. Nếu không khai báo, backend dùng `gemini-3.5-flash-lite`.
 
 ## Google Maps và Google Places
 
@@ -221,9 +224,8 @@ Một phần giao diện ban đầu được khởi tạo từ Figma Make rồi 
 
 ## Hướng phát triển tiếp
 
-- Thêm giao diện bookmark tỉnh / đã đi để dùng hai trường dữ liệu có sẵn.
-- Thêm trang quản lý lịch trình cá nhân.
-- Bổ sung user location để cá nhân hóa gợi ý gần vị trí hiện tại.
-- Bổ sung URL routing cho từng tỉnh để chia sẻ trực tiếp.
-- Thêm test cho auth, assistant, search và tương tác bản đồ.
+- Bổ sung user location nếu người dùng đồng ý chia sẻ vị trí để cá nhân hóa gợi ý.
+- Hoàn thiện quên mật khẩu, chỉnh sửa hồ sơ và khả năng tiếp cận với bàn phím trên bản đồ.
+- Thêm test tích hợp cho auth, assistant, search và tương tác bản đồ.
+- Thêm rate limiting chia sẻ trên toàn bộ serverless instances cho AI (với Redis/managed gateway).
 - Theo dõi Lighthouse/Core Web Vitals trên bản production.

@@ -255,6 +255,18 @@ test('day map API geocodes a specific landmark once and reuses the SQLite cache'
   globalThis.fetch = async (input, init) => {
     if (String(input).startsWith('https://nominatim.openstreetmap.org/search?')) {
       externalCalls++;
+      const search = new URL(String(input)).searchParams;
+      assert.equal(search.get('accept-language'), 'vi');
+      if (search.get('q')?.includes('Bà Nà Hills')) {
+        // Wrong-province result followed by a generic city center fallback:
+        // neither is a verified pin for this stop.
+        return Response.json([
+          { lat: '21.028', lon: '105.854', display_name: 'Bà Nà Hills, Hà Nội, Việt Nam',
+            address: { country_code: 'vn', city: 'Hà Nội' } },
+          { lat: '16.054', lon: '108.202', display_name: 'Đà Nẵng, Việt Nam', type: 'administrative',
+            address: { country_code: 'vn', city: 'Đà Nẵng' } },
+        ]);
+      }
       return Response.json([{
         lat: '16.061', lon: '108.227',
         display_name: 'Cầu Rồng, Đà Nẵng, Việt Nam',
@@ -286,6 +298,19 @@ test('day map API geocodes a specific landmark once and reuses the SQLite cache'
     assert.equal(genericFood.status, 200);
     assert.deepEqual((await genericFood.json()).points, []);
     assert.equal(externalCalls, 1, 'A generic dish is not a geographic location');
+
+    // The backend must not place a pin in another province or at a generic city center.
+    // Wait for the globally shared 1.6-second Nominatim throttle before the next lookup.
+    await new Promise(resolve => setTimeout(resolve, 1750));
+    const mismatch = { id: 'ba-na', title: 'Bà Nà Hills', category: 'activities' };
+    const unmatched = await call([mismatch]);
+    assert.equal(unmatched.status, 200);
+    assert.deepEqual((await unmatched.json()).points, []);
+    assert.equal(externalCalls, 2);
+    const cachedMiss = await call([mismatch]);
+    assert.equal(cachedMiss.status, 200);
+    assert.deepEqual((await cachedMiss.json()).points, []);
+    assert.equal(externalCalls, 2, 'A confirmed miss should be cached instead of repeatedly querying Nominatim');
   } finally {
     globalThis.fetch = originalFetch;
   }

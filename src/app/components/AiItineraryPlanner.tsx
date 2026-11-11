@@ -61,6 +61,9 @@ function Label({ children }: { children: ReactNode }) {
 
 export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }: Props) {
   const dialog = useRef<HTMLElement>(null);
+  const dirtyRef = useRef(false);
+  const busyRef = useRef(false);
+  const closeRef = useRef(onClose);
   const requestAbort = useRef<AbortController | null>(null);
   const [form, setForm] = useState<ItineraryRequest>(() => baseRequest(provinceId));
   const [plan, setPlan] = useState<StructuredItinerary | null>(null);
@@ -75,6 +78,9 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [listLoading, setListLoading] = useState(false);
+  dirtyRef.current = dirty;
+  busyRef.current = busy;
+  closeRef.current = onClose;
 
   useEffect(() => {
     if (provinceId in provincesData && !plan) {
@@ -89,7 +95,10 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
     const onKeyboard = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (!busy) close();
+        if (!busyRef.current && (!dirtyRef.current || window.confirm('Bạn có thay đổi chưa lưu. Đóng mà không lưu?'))) {
+          requestAbort.current?.abort();
+          closeRef.current();
+        }
       }
       if (event.key !== 'Tab') return;
       const controls = [...(dialog.current?.querySelectorAll<HTMLElement>(
@@ -110,8 +119,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
       previous?.focus();
       requestAbort.current?.abort();
     };
-    // Only bind when dialog opens: changes in dirty/busy are used through rendered close buttons.
-  }, [open, busy, dirty]);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !authenticated) return;
@@ -526,7 +534,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
                             </div>
                             <label className="block"><Label>Hoạt động / món ăn</Label>
                               <input maxLength={160} value={stop.title}
-                                onChange={event => changeStop(selectedDay, stop.id, { title: event.target.value, mapUrl: null })}
+                                onChange={event => changeStop(selectedDay, stop.id, { title: event.target.value, mapUrl: null, source: 'ai_suggestion' })}
                                 className="w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"/>
                             </label>
                             <label className="block"><Label>Ghi chú</Label>

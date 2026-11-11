@@ -50,6 +50,9 @@ test('rejects invalid budgets, days, province and notes', () => {
   assert.equal(parseRequest({ ...request, days: 15 }), null);
   assert.equal(parseRequest({ ...request, partySize: 0 }), null);
   assert.equal(parseRequest({ ...request, provinceId: 'Not real' }), null);
+  assert.equal(parseRequest({ ...request, includeArrivalTransport: true, arrivalTransportVnd: 0 }), null);
+  assert.equal(parseRequest({ ...request, includeArrivalTransport: true, arrivalTransportVnd: 2900000 }), null);
+  assert.equal(parseRequest({ ...request, includeArrivalTransport: true, arrivalTransportVnd: 500000 })?.arrivalTransportVnd, 500000);
   assert.equal(parseRequest({ ...request, preferences: { notes: 'x'.repeat(501) } }), null);
 });
 test('normalizes 3-day schedule and recalculates group budget on server', () => {

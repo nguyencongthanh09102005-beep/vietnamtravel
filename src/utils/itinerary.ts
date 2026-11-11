@@ -18,6 +18,7 @@ export interface ItineraryRequest {
   style: TravelStyle;
   startDate: string | null;
   includeArrivalTransport: boolean;
+  arrivalTransportVnd: number;
   preferences: ItineraryPreferences;
 }
 export interface ItineraryStop {
@@ -78,6 +79,9 @@ export function parseRequest(value: unknown): ItineraryRequest | null {
     ? null : value.startDate;
   if (startDate !== null && (typeof startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
     Number.isNaN(Date.parse(startDate + 'T00:00:00Z')))) return null;
+  const arrivalTransportVnd = value.arrivalTransportVnd === undefined ? 0 : value.arrivalTransportVnd;
+  if (!amount(arrivalTransportVnd) || (value.includeArrivalTransport === true &&
+      (arrivalTransportVnd < 1 || arrivalTransportVnd > value.totalBudgetVnd - 200_000))) return null;
   const preferences = isObj(value.preferences) ? value.preferences : {};
   const notes = typeof preferences.notes === 'string' ? preferences.notes.trim() : '';
   if (notes.length > 500) return null;
@@ -89,6 +93,7 @@ export function parseRequest(value: unknown): ItineraryRequest | null {
     style: value.style as TravelStyle,
     startDate,
     includeArrivalTransport: value.includeArrivalTransport === true,
+    arrivalTransportVnd: value.includeArrivalTransport === true ? arrivalTransportVnd : 0,
     preferences: {
       preferAffordablePlaces: preferences.preferAffordablePlaces !== false,
       minimizeTravel: preferences.minimizeTravel !== false,
@@ -97,11 +102,12 @@ export function parseRequest(value: unknown): ItineraryRequest | null {
   };
 }
 
-export function targetBudget(budget: number, days: number): BudgetBreakdown {
-  const foodVnd = Math.floor(budget * 0.45);
-  const lodgingVnd = days > 1 ? Math.floor(budget * 0.30) : 0;
-  const transportVnd = Math.floor(budget * (days > 1 ? 0.10 : 0.20));
-  const reserveVnd = Math.floor(budget * 0.10);
+export function targetBudget(budget: number, days: number, arrivalTransportVnd = 0): BudgetBreakdown {
+  const remaining = budget - arrivalTransportVnd;
+  const foodVnd = Math.floor(remaining * 0.45);
+  const lodgingVnd = days > 1 ? Math.floor(remaining * 0.30) : 0;
+  const transportVnd = arrivalTransportVnd + Math.floor(remaining * (days > 1 ? 0.10 : 0.20));
+  const reserveVnd = Math.floor(remaining * 0.10);
   const activitiesVnd = budget - foodVnd - lodgingVnd - transportVnd - reserveVnd;
   return { foodVnd, lodgingVnd, transportVnd, activitiesVnd, reserveVnd };
 }
@@ -155,14 +161,14 @@ export function normalizeItinerary(value: unknown, request: ItineraryRequest): S
     : [];
   const plan: StructuredItinerary = {
     schemaVersion: 1, ...request, title, schedule,
-    budgetBreakdown: targetBudget(request.totalBudgetVnd, request.days),
+    budgetBreakdown: targetBudget(request.totalBudgetVnd, request.days, request.arrivalTransportVnd),
     estimatedSpendVnd: 0, budgetRemainingVnd: 0, warnings,
   };
   return recalculatePlan(plan);
 }
 
 export function recalculatePlan(plan: StructuredItinerary): StructuredItinerary {
-  const targets = targetBudget(plan.totalBudgetVnd, plan.days);
+  const targets = targetBudget(plan.totalBudgetVnd, plan.days, plan.arrivalTransportVnd);
   const totals = { food: 0, activities: 0, transport: 0, lodging: 0 };
   for (const day of plan.schedule) for (const stop of day.stops) {
     totals[stop.category] += stop.estimatedCostVnd;

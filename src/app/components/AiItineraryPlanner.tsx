@@ -51,6 +51,7 @@ function baseRequest(id: string): ItineraryRequest {
     style: 'food',
     startDate: null,
     includeArrivalTransport: false,
+    arrivalTransportVnd: 0,
     preferences: { preferAffordablePlaces: true, minimizeTravel: true, notes: '' },
   };
 }
@@ -167,7 +168,8 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
         ? { ...form, ...{
           provinceId: plan.provinceId, days: plan.days, partySize: plan.partySize,
           totalBudgetVnd: plan.totalBudgetVnd, style: plan.style, startDate: plan.startDate,
-          includeArrivalTransport: plan.includeArrivalTransport, preferences: plan.preferences,
+          includeArrivalTransport: plan.includeArrivalTransport, arrivalTransportVnd: plan.arrivalTransportVnd,
+          preferences: plan.preferences,
         }, regenerateDay, currentPlan: plan }
         : form;
       const response = await fetch('/api/itineraries/generate', {
@@ -380,15 +382,24 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, onClose }:
                     <input type="checkbox" checked={form.includeArrivalTransport}
                       onChange={event => updateForm({ includeArrivalTransport: event.target.checked })}
                       className="mt-0.5 accent-emerald-600"/>
-                    Có tính chi phí đến điểm du lịch (cần bổ sung dự toán thủ công)
+                    Tính cả vé đến và rời điểm du lịch
                   </label>
+                  {form.includeArrivalTransport ? (
+                    <label className="block"><Label>Dự toán vé đến/đi cho cả nhóm (VND)</Label>
+                      <input type="number" min="1" max={Math.max(1, form.totalBudgetVnd - 200000)}
+                        step="50000" value={form.arrivalTransportVnd}
+                        onChange={event => updateForm({ arrivalTransportVnd: Number(event.target.value) })}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"/>
+                      <span className="mt-1 block text-[11px] text-amber-700">Nhập dự toán của bạn; AI không tự xác minh giá vé. Khoản này sẽ được trừ khỏi ngân sách dành cho các hoạt động.</span>
+                    </label>
+                  ) : null}
                   <label className="block"><Label>Yêu cầu riêng</Label>
                     <textarea rows={2} maxLength={500} value={form.preferences.notes}
                       onChange={event => updatePreferences({ notes: event.target.value })}
                       placeholder="Ví dụ: ít đi bộ, ưu tiên ăn đặc sản..."
                       className="w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"/>
                   </label>
-                  <button type="button" disabled={busy || form.days < 1 || form.days > 14 || form.partySize < 1 || form.partySize > 20 || form.totalBudgetVnd < 200000}
+                  <button type="button" disabled={busy || form.days < 1 || form.days > 14 || form.partySize < 1 || form.partySize > 20 || form.totalBudgetVnd < 200000 || (form.includeArrivalTransport && (form.arrivalTransportVnd <= 0 || form.arrivalTransportVnd > form.totalBudgetVnd - 200000))}
                     onClick={() => void generate()}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:opacity-50">
                     {busy ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <WandSparkles className="h-4 w-4"/>}

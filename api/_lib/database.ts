@@ -126,6 +126,20 @@ async function remoteRaw(sql: string, args: SqlValue[] = []): Promise<QueryResul
 }
 
 let localDb: import('node:sqlite').DatabaseSync | null = null;
+
+/**
+ * Release the native SQLite file handle on test teardown or local shutdown.
+ * Windows does not allow unlinking an SQLite file while DatabaseSync is open.
+ * Call only after all requests using the local database have settled.
+ */
+export function closeLocalDatabase() {
+  if (localDb) {
+    localDb.close();
+    localDb = null;
+  }
+  ready = undefined;
+}
+
 async function localRaw(sql: string, args: SqlValue[] = []): Promise<QueryResult> {
   if (!localDb) {
     const { DatabaseSync } = await import('node:sqlite');

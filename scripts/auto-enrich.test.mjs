@@ -42,7 +42,11 @@ const fetcherFor = (license='CC BY-SA 4.0', artist='Photo contributor') => async
   if(parsed.hostname==='vi.wikipedia.org') return Response.json({
     query:{pages:[{title,pageimage:'Ho_Du_Lich.jpg',
       pageprops:{wikibase_item:'Q12345678'},
+      categories:[{title:'Thể loại:Địa điểm du lịch Thanh Hóa'}],
       coordinates:[{lat:19.8,lon:105.7}]}]},
+  });
+  if(parsed.hostname==='www.wikidata.org') return Response.json({
+    entities:{Q12345678:{descriptions:{vi:{value:'hồ du lịch và điểm tham quan ở Việt Nam'}}}},
   });
   return Response.json({query:{pages:[{title:'File:Ho_Du_Lich.jpg',
     imageinfo:[{descriptionurl:'https://commons.wikimedia.org/wiki/File:Ho_Du_Lich.jpg',
@@ -82,6 +86,8 @@ test('verified content appears immediately in public API, but not duplicated on 
   assert.equal(third.approved,0);
   const rows=await dbQuery("SELECT COUNT(*) AS count FROM travel_content_items WHERE province_id='Thanh Hoa'");
   assert.equal(rows.rows[0].count,1);
+  const versions=await dbQuery("SELECT current_version_id FROM travel_content_items WHERE province_id='Thanh Hoa'");
+  assert.match(String(versions.rows[0].current_version_id),/^auto_v2_/);
 });
 
 test('original handwritten destination is enriched without deleting source or history',async ()=>{
@@ -110,8 +116,12 @@ test('original handwritten destination is enriched without deleting source or hi
     }]}});
     if (u.hostname === 'vi.wikipedia.org') return Response.json({query:{pages:[{
       title:'Biển Sầm Sơn',pageimage:'Sam_Son.jpg',pageprops:{wikibase_item:'Q12345'},
+      categories:[{title:'Thể loại:Bãi biển Thanh Hóa'}],
       coordinates:[{lat:19.75,lon:105.9}],
     }]}});
+    if (u.hostname === 'www.wikidata.org') return Response.json({
+      entities:{Q12345:{descriptions:{vi:{value:'bãi biển và điểm du lịch tại Thanh Hóa'}}}},
+    });
     return Response.json({query:{pages:[{imageinfo:[{
       descriptionurl:'https://commons.wikimedia.org/wiki/File:Sam_Son.jpg',
       extmetadata:{LicenseShortName:{value:'CC BY 4.0'},Artist:{value:'Licensed photographer'}},
@@ -151,8 +161,13 @@ test('a correct-source Wikidata item without licensed photo is still visible in 
       title:noImageTitle,extract:noImageIntro,
     }]}});
     if(u.hostname==='vi.wikipedia.org') return Response.json({query:{pages:[{
-      title:noImageTitle,pageprops:{wikibase_item:'Q345678'},coordinates:[{lat:19.8,lon:105.7}],
+      title:noImageTitle,pageprops:{wikibase_item:'Q345678'},
+      categories:[{title:'Thể loại:Địa điểm du lịch tại Thanh Hóa'}],
+      coordinates:[{lat:19.8,lon:105.7}],
     }]}});
+    if(u.hostname==='www.wikidata.org') return Response.json({
+      entities:{Q345678:{descriptions:{vi:{value:'địa điểm tham quan ở Thanh Hóa'}}}},
+    });
     throw new Error('Should never request Commons when there is no image');
   };
   const refreshed=await enrichSection('Thanh Hoa','places',{fetcher:src,force:true});

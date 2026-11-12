@@ -35,7 +35,7 @@ const candidate = {
 
 const fetcherFor = (license='CC BY-SA 4.0', artist='Photo contributor') => async url => {
   const parsed=new URL(url);
-  assert.ok(['vi.wikipedia.org','commons.wikimedia.org'].includes(parsed.hostname));
+  assert.ok(['vi.wikipedia.org','commons.wikimedia.org','www.wikidata.org'].includes(parsed.hostname));
   if(parsed.searchParams.get('generator')==='search') {
     return Response.json({query:{pages:[{title,extract:intro,thumbnail:{source:thumbnail}}]}});
   }

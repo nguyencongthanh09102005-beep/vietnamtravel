@@ -3,10 +3,12 @@ import { dbOne, dbQuery } from './database.js';
 import { discoverWikipedia, type DiscoveryCandidate } from './discover-content.js';
 import { HISTORICAL_PROVINCE_ALIASES } from '../../src/data/historicalProvinceAliases.js';
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
+import { archiveLegacyCatalog } from '../../src/utils/contentArchive.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 
 const UA = 'VietnamTravel/1.0 (https://github.com/nguyencongthanh09102005-beep/vietnamtravel; educational source attribution)';
 const SEVEN_DAYS_MS = 7 * 86400000;
+const legacyRows = archiveLegacyCatalog().records;
 type Section = 'places' | 'cuisine';
 type Dict = Record<string, unknown>;
 export type EnrichmentAssessment = { approved: boolean; reason: string; payload: DiscoveryCandidate['payload'] };
@@ -146,37 +148,62 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
   const fetcher = options.fetcher ?? fetch;
   let candidates: DiscoveryCandidate[];
   try {
-    candidates = await discoverWikipedia(provinceId,section,fetcher);
+    candidates = await discoverWikipedia(provinceId,section,fetcher,true);
   } catch (error) {
     console.warn('[auto-enrich] discovery failed', provinceId,section,error);
     return {...base,errors:1};
   }
   base.found = candidates.length;
   const oldItems = await dbQuery(
-    `SELECT v.payload_json FROM travel_content_items i
+    `SELECT i.content_id,v.source_kind,v.payload_json FROM travel_content_items i
     JOIN travel_content_versions v ON i.current_version_id=v.version_id
     WHERE i.province_id=? AND i.section=?`,[provinceId,section]);
-  const names = new Set(oldItems.rows.map(row=>{
-    try{return normalized(String((JSON.parse(String(row.payload_json)) as {name:string}).name))}catch{return''}
+  const names = new Map<string,string>(oldItems.rows.map(row=>{
+    try{return [normalized(String((JSON.parse(String(row.payload_json)) as {name:string}).name)),
+      String(row.source_kind)]}catch{return ['','unknown']}
   }));
-  for (const candidate of candidates) {
-    if (names.has(normalized(candidate.payload.name))) continue;
+  for (const candidate of candidates.slice(0,8)) {
+    const name = normalized(candidate.payload.name);
+    if (names.has(name) && names.get(name) !== 'legacy_manual') continue;
+    // Match an original record by exact name to enrich it in-place via a new
+    // *version*. provinceDetailsData.ts is never touched and remains fallback.
+    const old = legacyRows.find(row => row.provinceId === provinceId &&
+      row.section === section && 'name' in row.payload &&
+      normalized(row.payload.name) === name);
+    const contentId = old?.id ?? candidate.contentId;
     const verdict = await assessCandidate(candidate,fetcher);
     const status = verdict.approved ? 'approved' : 'pending';
-    const versionId = 'auto_' + createHash('sha256').update(candidate.contentId + JSON.stringify(verdict.payload)).digest('hex').slice(0,48);
+    const versionId = 'auto_' + createHash('sha256').update(contentId + JSON.stringify(verdict.payload)).digest('hex').slice(0,48);
     const row = await dbQuery(
       `INSERT OR IGNORE INTO travel_content_versions
        (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,checked_at,created_at)
        VALUES (?,?,?,?,?,'verified_external',?,?,?,?)`,
-      [versionId,candidate.contentId,provinceId,section,JSON.stringify(verdict.payload),
+      [versionId,contentId,provinceId,section,JSON.stringify(verdict.payload),
         candidate.sourceRef,status,now.toISOString(),now.toISOString()]);
     if (!row.changes) continue;
     if (verdict.approved) {
       const active = await dbQuery(
         `INSERT OR IGNORE INTO travel_content_items(content_id,province_id,section,current_version_id,updated_at)
-        VALUES (?,?,?,?,?)`,[candidate.contentId,provinceId,section,versionId,now.toISOString()]);
-      base.approved += active.changes;
-      names.add(normalized(candidate.payload.name));
+        VALUES (?,?,?,?,?)`,[contentId,provinceId,section,versionId,now.toISOString()]);
+      let published = active.changes;
+      if (!published && old) {
+        // A previously imported manual version may be replaced by a verified
+        // revision, but existing verified versions are never overwritten.
+        const current = await dbOne(
+          `SELECT i.current_version_id,v.source_kind FROM travel_content_items i
+           JOIN travel_content_versions v ON v.version_id=i.current_version_id
+           WHERE i.content_id=? AND i.province_id=? AND i.section=?`,
+          [contentId,provinceId,section]);
+        if (current?.source_kind === 'legacy_manual') {
+          const updated = await dbQuery(
+            `UPDATE travel_content_items SET current_version_id=?,updated_at=?
+             WHERE content_id=? AND current_version_id=?`,
+            [versionId,now.toISOString(),contentId,String(current.current_version_id)]);
+          published += updated.changes;
+        }
+      }
+      base.approved += published;
+      names.set(name,'verified_external');
     } else {
       base.pending++;
     }

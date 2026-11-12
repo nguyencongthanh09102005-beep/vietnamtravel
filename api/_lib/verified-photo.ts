@@ -102,7 +102,7 @@ export async function findVerifiedCommonsPhoto(args:{
     args.articlePageimage.length<=180 &&
     /\.(?:jpe?g|png|webp)$/i.test(args.articlePageimage) &&
     !args.articlePageimage.includes('/') ? args.articlePageimage :
-    (args.articleUrl ? await verifiedArticlePageimage({
+    (args.articleUrl && !p18 ? await verifiedArticlePageimage({
       articleUrl:args.articleUrl,wikidataId:args.wikidataId,fetcher,
     }) : null);
   // Prefer P18. The page's own cover is a fallback ONLY if the exact article

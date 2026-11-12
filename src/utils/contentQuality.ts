@@ -57,7 +57,7 @@ const FOOD_CAT = /\b(?:am thuc|mon an|dac san|banh viet nam|thuc pham|do uong|mo
 const FOOD_DESC = /\b(?:mon an|dac san|am thuc|thuc pham|banh|dish|cuisine|food|snack|traditional food|specialty)\b/;
 const PLACE_CAT = /\b(?:di tich|danh lam|thang canh|dia diem du lich|diem tham quan|du lich|bao tang|nha co|chua|den tho|nha tho|bai bien|dao|thac|hang dong|vuon quoc gia|khu du lich|cong vien|di san|kien truc|nui)\b/;
 const PLACE_DESC = /\b(?:di tich|diem tham quan|dia diem du lich|thang canh|nha co|bao tang|chua|den tho|nha tho|bai bien|dao|thac|hang dong|vuon quoc gia|khu du lich|cong vien|cau|nui|ho|ben cang|tourist attraction|historic site|temple|museum|beach|island|mountain|park|lake|bridge|building|landmark|castle|waterfall)\b/;
-const CATEGORY_EXCLUSION = /\b(?:tai nan|su co|tham hoa|bao mang|bao chi|bao cao|thoi su|nhan vat|nguoi|dan toc|giong vat nuoi|giong gia cam|giong ga|dong vat|bo toc|thanh pho|don vi hanh chinh|tinh cua viet nam|tinh thanh|quan huyen|cac tinh|lich su tinh|kien thuc bac khoa)\b/;
+const CATEGORY_EXCLUSION = /\b(?:tai nan|su co|tham hoa|bao mang|bao chi|bao cao|thoi su|nhan vat|cac dan toc|dan toc|giong vat nuoi|giong gia cam|giong ga|dong vat|bo toc|thanh pho|don vi hanh chinh|tinh cua viet nam|tinh thanh|quan huyen|cac tinh|lich su tinh|kien thuc bac khoa)\b/;
 
 export interface ContentTaxonomyEvidence {
   name: string;

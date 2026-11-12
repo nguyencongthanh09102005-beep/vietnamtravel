@@ -108,7 +108,17 @@ export async function findVerifiedCommonsPhoto(args:{
   // Prefer P18. The page's own cover is a fallback ONLY if the exact article
   // matches the entity QID and the image is the Wikipedia pageimage.
   const files=[p18,articleFile].filter((name):name is string=>Boolean(name));
-  for(const filename of [...new Set(files)]){
+  const candidates=[...new Set(files)];
+  let usedDepictsFallback=false;
+  for(let index=0;index<candidates.length||!usedDepictsFallback;index++){
+    if(index>=candidates.length){
+      usedDepictsFallback=true;
+      // P180 matches the exact subject QID, not a keyword in a filename.
+      const depicts=await searchCommonsExactDepicts({wikidataId:args.wikidataId,fetcher});
+      candidates.push(...depicts.filter(name=>!candidates.includes(name)));
+      if(index>=candidates.length)break;
+    }
+    const filename=candidates[index];
     const endpoint=new URL('https://commons.wikimedia.org/w/api.php');
     endpoint.search=new URLSearchParams({
       action:'query',format:'json',formatversion:'2',
@@ -149,6 +159,47 @@ export async function findVerifiedCommonsPhoto(args:{
     }catch{continue;}
   }
   return null;
+}
+
+
+/**
+ * Commons structured-data (P180 = "depicts") is an exact-QID fallback.
+ * It is not a broad image keyword search. Each candidate still goes through
+ * a separate Commons imageinfo / author / commercial license inspection.
+ * https://commons.wikimedia.org/wiki/Help:Search#Search_using_structured_data
+ */
+export async function searchCommonsExactDepicts(args:{
+  wikidataId:string; fetcher?:typeof fetch;
+}):Promise<string[]>{
+  if(!/^Q\d+$/.test(args.wikidataId))return [];
+  const api=new URL('https://commons.wikimedia.org/w/api.php');
+  api.search=new URLSearchParams({
+    action:'query',list:'search',srnamespace:'6',
+    srsearch:'haswbstatement:P180='+args.wikidataId,
+    srlimit:'8',format:'json',formatversion:'2',
+  }).toString();
+  try{
+    const response=await (args.fetcher??fetch)(api.toString(),{
+      headers:{'User-Agent':UA,Accept:'application/json'},
+      redirect:'error',signal:AbortSignal.timeout(10000),
+    });
+    if(!response.ok)return [];
+    const body=await response.text();
+    if(body.length>400_000)return [];
+    const search=asRecord(asRecord(JSON.parse(body)).query).search;
+    if(!Array.isArray(search))return [];
+    const files:string[]=[];
+    for(const value of search.slice(0,8)){
+      const row=asRecord(value);
+      if(row.ns!==6||typeof row.title!=='string'||!row.title.startsWith('File:'))continue;
+      const name=row.title.slice(5);
+      if(name.length<3||name.length>180||name.includes('/')||name.includes('\\')||
+        !/\.(?:jpe?g|png|webp)$/i.test(name))continue;
+      if(!files.includes(name))files.push(name);
+      if(files.length>=5)break;
+    }
+    return files;
+  }catch{return [];}
 }
 
 export function photoVersionId(contentId:string,payload:unknown):string{

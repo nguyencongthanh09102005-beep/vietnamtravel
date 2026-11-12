@@ -99,8 +99,14 @@ export async function assessCoreGate(candidateId:string):Promise<CoreGate>{
   if(String(row.detail).trim().length<180)
     reasons.push('Thiếu mô tả chi tiết có chứng cứ, không thể chỉ dùng RSS');
   const imageUrl=String(row.image_url??'');
+  const verifiedPhoto=imageUrl && Number(row.photo_reviewed)===1
+    ? await dbOne(
+      `SELECT image_id FROM travel_image_candidates
+       WHERE content_id=? AND image_url=? AND license=? AND state='approved' LIMIT 1`,
+      [candidateId,imageUrl,String(row.image_license)],
+    ) : null;
   if(!imageUrl||!String(row.image_license)||!String(row.image_credit_url)||
-      Number(row.photo_reviewed)!==1)
+      Number(row.photo_reviewed)!==1||!verifiedPhoto)
     reasons.push('Chưa có ảnh đúng chủ thể được duyệt, ghi nguồn và giấy phép');
   if(String(row.status)==='rejected')reasons.push('Ứng viên đã bị từ chối');
   return {eligible:reasons.length===0,reasons,officialSources,newsHosts};

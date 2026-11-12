@@ -40,7 +40,9 @@ export function provinceAreaNames(provinceId:ProvinceId):string[]{
 }
 export function makeOverpassQuery(provinceId:ProvinceId,group:OsmQueryGroup='tourism'):string{
   const names=provinceAreaNames(provinceId).map(name=>{
-    const value=name.replace(/[\\\\\"\\n\\r]/g,'');
+    // These names are static entries from provincesData, not user-supplied.
+    // Never use a broad escape regex that can strip Vietnamese letters.
+    const value=name;
     return '  area["name"="'+value+'"]["boundary"="administrative"]["admin_level"="4"];';
   }).join('\\n');
   // The old query searched tourism + historic + natural across a whole
@@ -159,6 +161,11 @@ export async function queryOsmProvince(provinceId:ProvinceId,fetcher:typeof fetc
         if(reason.includes('OVERPASS_RATE_LIMIT_429'))break;
         if(index===0)console.warn('[OSM] Trying a smaller query on the mirror instead of repeating the same query.');
       }
+    }
+    if(phaseData===null) {
+      // Two unavailable mirrors are a source outage/expensive query,
+      // not a signal to issue two more queries for a different tag family.
+      break;
     }
     if(phaseData){
       console.log('[OSM]',provinceId,group+':',phaseData.length,'candidate locations in response');

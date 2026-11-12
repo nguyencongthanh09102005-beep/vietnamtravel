@@ -43,8 +43,8 @@ export function isSubjectExcluded(name: string, section: ContentGroup, descripti
     return true;
   // Administrative names are labelled with a *prefix or disambiguator*, not
   // incidental words such as "tham quan" or "tỉnh Quảng Ngãi" in the text.
-  if (/\\((?:tỉnh|thành phố|thị xã|huyện|quận|xã)\\)/i.test(name) ||
-      /^(?:tinh|thanh pho|thi xa|huyen|quan|xa|phuong)\\s+/.test(normalizeContentText(name)))
+  if (/\((?:tỉnh|thành phố|thị xã|huyện|quận|xã)\)/i.test(name) ||
+      /^(?:tinh|thanh pho|thi xa|huyen|quan|xa|phuong)\s+/.test(normalizeContentText(name)))
     return true;
   if (/^ (?:nguoi|doan |su co |vu |tinh |thanh pho |quan |huyen )/.test(title)) return true;
   if (section === 'cuisine') {

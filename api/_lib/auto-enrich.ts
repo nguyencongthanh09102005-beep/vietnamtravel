@@ -23,7 +23,7 @@ function stripHtml(value: unknown): string {
     .replace(/\s+/g,' ').trim().slice(0,240) : '';
 }
 export function normalized(value: string) {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d')
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d')
     .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 }
 function strongProvinceMention(text: string, provinceId: ProvinceId): boolean {

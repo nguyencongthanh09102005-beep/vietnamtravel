@@ -1,6 +1,12 @@
+import { loadEnv } from 'vite';
 import { closeLocalDatabase } from '../.api-test-dist/api/_lib/database.js';
 import { repairMissingPhotos } from '../.api-test-dist/api/_lib/photo-repair.js';
 
+const env=loadEnv('development',process.cwd(),'');
+for(const key of ['GEMINI_API_KEY','GEMINI_MODEL','GEMINI_FALLBACK_MODEL',
+  'TURSO_DATABASE_URL','TURSO_AUTH_TOKEN']) {
+  if(process.env[key]===undefined && env[key]!==undefined) process.env[key]=env[key];
+}
 if(process.env.TURSO_DATABASE_URL||process.env.TURSO_AUTH_TOKEN||process.env.VERCEL)
   throw new Error('SAFETY_STOP: only local SQLite; never modify Production Turso');
 const args=process.argv.slice(2);

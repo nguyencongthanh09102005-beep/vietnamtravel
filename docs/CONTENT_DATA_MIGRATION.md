@@ -162,6 +162,64 @@ cấu hình backend và một lần triển khai Vercel.
 - Dữ liệu chuẩn về từng món ăn và địa điểm từ nhiều nguồn độc lập.
 - Tự sửa địa giới hành chính mới và bản đồ SVG.
 
+## Sửa lỗi chất lượng dữ liệu tự đăng (sau phản hồi 7 ảnh)
+
+**Vấn đề đã xác nhận:** Trước đây bộ quét chỉ tìm keyword trong tóm tắt
+Wikipedia, không kiểm chứng **chủ thể thực sự**. Vì vậy người Dao hoặc
+đoàn chèo có thể lọt vào Ẩm thực; tin sập cầu có thể lọt vào Địa điểm;
+Quảng Bình (tỉnh) bị đưa vào Địa điểm Quảng Trị; Don (món ăn) bị trùng
+với Don Quảng Ngãi.
+
+### Nguyên tắc mới
+
+1. Bản ghi tự tạo từ bộ lọc cũ có ID phiên bản `auto_...` sẽ **không
+   xuất hiện trên giao diện** ngay khi cập nhật code. Điều này áp dụng cho
+   cả những mục cũ đúng: cần kiểm chứng lại trước khi công khai.
+2. Muốn tự đăng mới cần chứng cứ phân loại từ **cả chuyên mục bài viết
+   Wikipedia lẫn mô tả Wikidata**, tên chủ thể, liên hệ tỉnh trong phần
+   mở đầu, tọa độ nếu là Địa điểm. Bản mới đánh dấu `auto_v2_` và
+   `taxonomyGateVersion=2`. Một số bài vẫn có thể sai; hệ thống ưu tiên
+   không đăng hơn đăng nhầm.
+3. Tin tai nạn/sự cố, dân tộc, đoàn nghệ thuật, tỉnh/thành phố và giống
+   vật nuôi không phải đối tượng của Địa điểm/Ẩm thực. Thực phẩm/đặc sản
+   chưa chắc là **món ăn chế biến**, cần gọi đúng tên nhóm.
+4. Chuẩn hóa tên vùng và hậu tố `(món ăn)` để tránh hai thẻ cùng một
+   đặc sản (ví dụ Don Quảng Ngãi và Don (món ăn)).
+5. Dữ liệu thủ công trong `provinceDetailsData.ts` không bị xóa.
+   Cơ sở dữ liệu chỉ lưu bản ghi/phiên bản bổ sung.
+
+### Dọn sạch dữ liệu đã đăng sai trên LOCALHOST
+
+Dừng `npm run dev` trước khi chạy lệnh làm sạch database trên máy.
+Tại terminal:
+
+```powershell
+cd "D:\dự án\vietnamtravel"
+git pull origin main
+npm run catalog:quarantine
+npm run catalog:quarantine -- --apply
+npm run catalog:enrich -- --force
+npm run dev
+```
+
+- Lệnh **không có `--apply`** chỉ liệt kê mục tự động cũ sẽ bị cách ly.
+- Lệnh có `--apply` sao lưu danh sách vào
+  `.data/backups/legacy-auto-content-quarantine.json`, ghi nhật ký vào
+  `travel_content_quarantine` và **bỏ liên kết đang hiển thị**
+  của các phiên bản `auto_` đời cũ trong local SQLite.
+- **Không xóa `travel_content_versions`**, cũng không chạm tài khoản
+  hay lịch trình đã lưu. Bản gốc trong code vẫn hiển thị.
+- Đợt quét mới dùng checkpoint `taxonomy-v2:` để chủ động kiểm tra
+  lại nguồn, không bị vướng cache 7 ngày của hệ cũ.
+- Tác vụ local sẽ không tự cập nhật Turso online. Nếu đã bật biến Turso
+  trong terminal, lệnh cách ly sẽ từ chối vì lý do an toàn.
+
+**Giới hạn:** Nguồn Wikipedia và Wikidata có thể thiếu phân loại hoặc
+dữ liệu cũ, nên số mục mới có thể giảm đáng kể. Đây là sửa **độ đúng**,
+không phải cam kết đạt 8–15 mục ngay. Muốn bổ sung nhiều mục chất lượng
+hơn cần thêm nguồn du lịch chính thức, OpenStreetMap và quy trình xác
+minh chéo không đánh đồng kết quả tìm kiếm với địa điểm thật.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

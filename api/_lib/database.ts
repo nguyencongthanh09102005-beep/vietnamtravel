@@ -125,6 +125,57 @@ const schema = [
     first_seen_at TEXT NOT NULL
   )`,
   'CREATE INDEX IF NOT EXISTS trusted_news_review_idx ON travel_source_leads(review_status,first_seen_at)',
+  // Both pipelines use this queue; neither RSS nor fuzzy photo search can
+  // publish a card. Province+section+canonical identity prevents duplicates.
+  `CREATE TABLE IF NOT EXISTS travel_core_candidates (
+    candidate_id TEXT PRIMARY KEY,
+    province_id TEXT NOT NULL,
+    section TEXT NOT NULL CHECK(section IN ('places','cuisine')),
+    subject_key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK(status IN ('pending','ready_for_review','published','rejected')),
+    is_core_data INTEGER NOT NULL DEFAULT 0,
+    image_url TEXT NOT NULL DEFAULT '',
+    image_license TEXT NOT NULL DEFAULT '',
+    image_credit_url TEXT NOT NULL DEFAULT '',
+    image_attribution TEXT NOT NULL DEFAULT '',
+    photo_reviewed INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+    UNIQUE(province_id,section,subject_key)
+  )`,
+  `CREATE TABLE IF NOT EXISTS travel_core_candidate_sources (
+    candidate_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    source_role TEXT NOT NULL,
+    independent_host TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    PRIMARY KEY(candidate_id,url),
+    FOREIGN KEY(candidate_id) REFERENCES travel_core_candidates(candidate_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS travel_image_candidates (
+    image_id TEXT PRIMARY KEY,
+    content_id TEXT NOT NULL,
+    province_id TEXT NOT NULL,
+    section TEXT NOT NULL CHECK(section IN ('places','cuisine')),
+    subject_name TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    source_kind TEXT NOT NULL,
+    license TEXT NOT NULL,
+    attribution TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending'
+      CHECK(state IN ('pending','approved','rejected')),
+    created_at TEXT NOT NULL,
+    UNIQUE(content_id,source_url)
+  )`,
+  'CREATE INDEX IF NOT EXISTS travel_image_pending_idx ON travel_image_candidates(content_id,state)',
+
 
 
 

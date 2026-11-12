@@ -14,7 +14,7 @@ function validItem(value: unknown): value is { name: string; description: string
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const x = value as Record<string, unknown>;
   return typeof x.name === 'string' && x.name.trim().length > 1 && x.name.length <= 180
-    && typeof x.description === 'string' && x.description.trim() && x.description.length <= 5000
+    && typeof x.description === 'string' && x.description.trim().length > 0 && x.description.length <= 5000
     && validImage(x.image) && Object.keys(x).length <= 20;
 }
 function validHistory(value: unknown): value is { year: string; event: string } {

@@ -11,6 +11,18 @@ export function ImageWithFallback(props: React.ImgHTMLAttributes<HTMLImageElemen
     setDidError(false);
   }, [src]);
 
+  if (!src) {
+    return (
+      <div className={`flex items-center justify-center bg-gradient-to-br from-emerald-50 to-slate-100 ${className ?? ''}`}
+        style={style} role="img" aria-label={alt ? `Chưa có ảnh cho ${alt}` : 'Chưa có ảnh'}>
+        <div className="flex flex-col items-center justify-center gap-2 text-center text-slate-500">
+          <img src={ERROR_IMG_SRC} alt="" aria-hidden="true" className="h-9 w-9 opacity-35" />
+          <span className="text-[11px] font-medium">Chưa có ảnh xác minh</span>
+        </div>
+      </div>
+    );
+  }
+
   if (didError) {
     return (
       <div

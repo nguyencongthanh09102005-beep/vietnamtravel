@@ -35,7 +35,7 @@ function strongProvinceMention(text: string, provinceId: ProvinceId): boolean {
 }
 function relevantToSection(title: string, description: string, section: Section) {
   const value = normalized(title + ' ' + description.slice(0,400));
-  if (/\b(danh sach|danh muc|du lich|am thuc|kinh te|hanh chinh|giao thong|van hoa|lich su)\b/.test(normalized(title)))
+  if (/^(?:danh sach|danh muc|du lich |am thuc |kinh te |hanh chinh |giao thong |van hoa |lich su )/.test(normalized(title)))
     return false;
   if (section === 'places') return /(di tich|danh lam|thang canh|khu du lich|tham quan|thac|vuon quoc gia|den|chua|lang co|hang|dong|nui|doi|cong vien|bao tang|thanh co|ho|bien|thap|cho noi|bai bien|dao|suoi|khu bao ton|nha tho)/.test(value);
   return /(dac san|mon an|am thuc|banh|nem|chao|com|bun|pho|cha |che |mam|goi|rau|lau|canh|keo|mi |hu tieu|ca kho|thit|tom|bun)/.test(value);

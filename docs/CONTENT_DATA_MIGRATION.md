@@ -122,6 +122,8 @@ khách xem trang.
   dùng ảnh tỉnh thay cho ảnh món ăn.** Các nguồn thuộc Wikimedia không phải
   nhiều nguồn độc lập, nên kiểm tra này chưa thể đảm bảo chính xác tuyệt đối.
 - Lưu phiên bản đã duyệt vào SQLite local; dữ liệu thủ công được giữ nguyên.
+  Nếu nguồn tìm thấy một mục **trùng đúng tên thẻ cũ**, có thể nâng cấp mô tả
+  và ảnh dưới dạng **phiên bản mới**, không xóa bản cũ và có đường phục hồi.
   Khi tab tỉnh đang mở, giao diện sẽ đọc lại nội dung sau mỗi 45 giây hoặc
   khi bạn quay lại tab.
 - Ghi nhận từng nhóm tỉnh đã quét; không kiểm tra lại trong vòng 7 ngày trừ

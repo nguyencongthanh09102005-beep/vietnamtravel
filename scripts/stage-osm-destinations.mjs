@@ -1,4 +1,5 @@
 import { loadEnv } from 'vite';
+import { resolveOsmCliArgs } from './osm-cli-args.mjs';
 const env=loadEnv('development',process.cwd(),'');
 for(const key of ['TURSO_DATABASE_URL','TURSO_AUTH_TOKEN']){
   if(process.env[key]===undefined&&env[key]!==undefined)process.env[key]=env[key];
@@ -6,19 +7,11 @@ for(const key of ['TURSO_DATABASE_URL','TURSO_AUTH_TOKEN']){
 if(process.env.TURSO_DATABASE_URL||process.env.TURSO_AUTH_TOKEN||process.env.VERCEL)
   throw Error('SAFETY_STOP: external geodata staging is LOCAL SQLite only');
 const args=process.argv.slice(2);
-const usage='Usage: npm run catalog:osm -- --province "Can Tho" OR npm run catalog:osm -- --all';
-if(!((args.length===2 && args[0]==='--province'&&args[1]) ||
-     (args.length===1&&args[0]==='--all')))throw Error(usage);
 const {provincesData}=await import('../.api-test-dist/src/data/provincesData.js');
 const {closeLocalDatabase}=await import('../.api-test-dist/api/_lib/database.js');
 const {stageOsmProvince}=await import('../.api-test-dist/api/_lib/osm-seeding.js');
-const chosen=args[0]==='--all'
-  ? Object.keys(provincesData).filter(x=>!['Hoang Sa','Truong Sa'].includes(x))
-  : [args[1]];
-for(const province of chosen){
-  if(!Object.hasOwn(provincesData,province) ||['Hoang Sa','Truong Sa'].includes(province))
-    throw Error('Unknown province ID: '+province);
-}
+const chosen=resolveOsmCliArgs(args,provincesData);
+console.log('OSM provinces selected:',chosen.join(', '));
 try {
   console.log('OpenStreetMap geodata © OpenStreetMap contributors — ODbL');
   console.log('Sources are STAGED ONLY. No new cards are published or images copied.');

@@ -518,7 +518,7 @@ Chạy thử một tỉnh:
 ```powershell
 cd "D:\dự án\vietnamtravel"
 git pull origin main
-npm run catalog:osm -- --province "Can Tho"
+npm run catalog:osm -- --province Can_Tho
 npm run catalog:core-stage
 ```
 
@@ -528,6 +528,8 @@ Chạy toàn bộ 34 tỉnh (dành cho thử nghiệm một lần, có nghỉ gi
 ```powershell
 npm run catalog:osm -- --all
 ```
+
+**Windows PowerShell:** Tránh truyền tên tỉnh chứa dấu cách có dấu ngoặc kép qua npm vì một số môi trường chuyển thành `^Can^ Tho^`. Dùng `--province Can_Tho`; CLI mới cũng tự chuẩn hóa cả dạng `--province="Can Tho"`, `Cần Thơ` và đối chiếu danh sách 34 tỉnh. Nếu lệnh `core-stage` chạy trước khi lệnh OSM thành công, nó chỉ duyệt lại ứng viên có sẵn, không tự bổ sung dữ liệu OSM.
 
 **Giới hạn cần biết:** OSM có thể chưa cập nhật đầy đủ ranh giới tỉnh
 sau sáp nhập năm 2025, nên một số tỉnh có ít hoặc 0 kết quả; tọa độ,

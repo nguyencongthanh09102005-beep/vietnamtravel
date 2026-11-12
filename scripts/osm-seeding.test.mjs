@@ -78,3 +78,27 @@ test('OSM geodata creates non-public candidate evidence with exact map URL, sour
   assert.equal(again.newEntities,0);
   assert.equal(again.updatedGeodata,0);
 });
+
+test('OSM CLI accepts PowerShell/npm caret-escaped province and no-space arguments',async()=>{
+  const { resolveOsmCliArgs }=await import('./osm-cli-args.mjs');
+  const { provincesData }=await import('../.api-test-dist/src/data/provincesData.js');
+  const cases=[
+    ['--province','Can Tho'],
+    ['--province','^Can^ Tho^'],
+    ['--province','Can','Tho'],
+    ['--province','Can_Tho'],
+    ['--province=Can_Tho'],
+    ['--province=Can Tho'],
+    ['--province','Cần Thơ'],
+    ['--province','TP. Cần Thơ'],
+    ['--province','cantho'],
+    ['--province','"Can Tho"'],
+  ];
+  for(const args of cases)
+    assert.deepEqual(resolveOsmCliArgs(args,provincesData),['Can Tho'],
+      'Should resolve Windows args '+JSON.stringify(args));
+  assert.deepEqual(resolveOsmCliArgs(['--all'],provincesData).length,34);
+  assert.throws(()=>resolveOsmCliArgs(['--province','Unknown_Province'],provincesData));
+  assert.throws(()=>resolveOsmCliArgs(['--province','Hoang_Sa'],provincesData));
+  assert.throws(()=>resolveOsmCliArgs(['--force'],provincesData));
+});

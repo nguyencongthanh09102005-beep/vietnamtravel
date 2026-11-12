@@ -15,7 +15,7 @@ export const AUTO_CONTENT_GATE_VERSION = 2;
 export type ContentGroup = 'places' | 'cuisine';
 
 export function normalizeContentText(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g,'d')
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g,'d')
     .toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
 }
 function hasPhrase(value: string, rx: RegExp): boolean {
@@ -41,12 +41,14 @@ export function isSubjectExcluded(name: string, section: ContentGroup, descripti
   // Reports, accidents, people, performing troupes, administrative entities.
   if (/\b(?:su co|tai nan|vu tre|vu viec|tham kich|sap nhip|sap cau|roi vao|tin tuc|bao cao|doan cheo|doan nghe thuat|nguoi dao|dan toc|tap the|khu cong nghiep)\b/.test(title))
     return true;
-  if (/\b(?:tinh|thanh pho|thi xa|huyen|quan|xa|phuong|huyen dao)\b/.test(title) &&
-    /\b(?:tinh|thanh pho|thi xa|huyen|quan|xa|phuong)\b/.test(intro))
+  // Administrative names are labelled with a *prefix or disambiguator*, not
+  // incidental words such as "tham quan" or "tỉnh Quảng Ngãi" in the text.
+  if (/\\((?:tỉnh|thành phố|thị xã|huyện|quận|xã)\\)/i.test(name) ||
+      /^(?:tinh|thanh pho|thi xa|huyen|quan|xa|phuong)\\s+/.test(normalizeContentText(name)))
     return true;
   if (/^ (?:nguoi|doan |su co |vu |tinh |thanh pho |quan |huyen )/.test(title)) return true;
   if (section === 'cuisine') {
-    if (/\b(?:giong ga|giong vat nuoi|giong cho|giong ca|loai chim|loai ga|ho ca|dong vat|dan toc|con nguoi|ngon ngu|nghe thuat|cong trinh|ben |ben cang|thanh pho|cau |dao |nui |tinh |cho noi)\b/.test(intro))
+    if (/\b(?:giong ga|giong vat nuoi|giong cho|giong ca|loai chim|loai ga|ho ca|dong vat|dan toc|con nguoi|ngon ngu|nghe thuat|cong trinh|ben |ben cang|cau |dao |nui |cho noi)\b/.test(intro))
       return true;
     if (/\b(?:giong ga|giong vat nuoi|ga lien minh)\b/.test(title)) return true;
   }

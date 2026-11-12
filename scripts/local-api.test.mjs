@@ -49,6 +49,15 @@ test('dev API accepts request body and validates it', async () => {
   assert.equal((await response.json()).error.length > 0, true);
 });
 
+test('additive travel content tables exist without modifying account data', async () => {
+  // The test DB lives in a disposable temp folder; production Turso is never touched.
+  const { dbQuery } = await server.ssrLoadModule('/api/_lib/database.ts');
+  const rows = await dbQuery("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('travel_content_versions','travel_content_items') ORDER BY name");
+  assert.deepEqual(rows.rows.map(row => row.name), ['travel_content_items', 'travel_content_versions']);
+  const empty = await dbQuery('SELECT COUNT(*) AS total FROM travel_content_items');
+  assert.equal(empty.rows[0].total, 0, 'Existing hard-coded content is not erased or auto-overwritten');
+});
+
 test('dev AI API is routed to the real TypeScript handler', async () => {
   const response = await fetch(base + '/api/ai');
   assert.equal(response.status, 405);

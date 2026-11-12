@@ -147,7 +147,11 @@ export async function enqueueImagesForReview(options:{
      ON v.version_id=i.current_version_id
      WHERE i.current_version_id LIKE 'auto_v2_%'
        AND v.reviewed_status='approved' AND i.section IN ('places','cuisine')
-     ORDER BY i.province_id,i.section LIMIT 400`,
+     UNION ALL
+     SELECT candidate_id AS content_id,province_id,section,
+       json_object('name',name,'image',image_url,'taxonomyGateVersion',2) AS payload_json
+     FROM travel_core_candidates WHERE status IN ('pending','ready_for_review')
+     ORDER BY province_id,section LIMIT 400`,
   );
   const summary={checked:0,newImages:0,missing:0};
   for(const row of rows.rows){

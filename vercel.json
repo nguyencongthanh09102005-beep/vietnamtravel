@@ -3,6 +3,10 @@
     {
       "path": "/api/content/refresh",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/administration/check",
+      "schedule": "0 3 * * *"
     }
   ]
 }

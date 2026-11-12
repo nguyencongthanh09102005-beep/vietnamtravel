@@ -152,6 +152,45 @@ test('draft review is denied without separate administrator authorization', asyn
   }
 });
 
+test('official administration watcher is authorized and preserves map/user data', async () => {
+  const previous = process.env.CRON_SECRET;
+  const originalFetch = globalThis.fetch;
+  const { default: check } = await server.ssrLoadModule('/api/administration/check.ts');
+  const officialPage = `<html><body><h1>Danh sách tỉnh thành sau sáp nhập</h1>
+  <p>Kể từ năm 2025, cả nước có 34 đơn vị hành chính cấp tỉnh.</p>
+  <h2>Chi tiết các tỉnh, thành phố hình thành sau sắp xếp</h2>
+  <p>Yên Bái và Lào Cai thành tỉnh mới Lào Cai; Đồng Tháp và Tiền Giang thành Đồng Tháp.</p>
+  <h2>Chính quyền địa phương hình thành sau sắp xếp</h2>
+  </body></html>`;
+  try {
+    delete process.env.CRON_SECRET;
+    assert.equal((await check.fetch(new Request('https://example.test/api/administration/check'))).status,503);
+    process.env.CRON_SECRET='test-secret-0123456789-0123456789-abcdef';
+    assert.equal((await check.fetch(new Request('https://example.test/api/administration/check'))).status,401);
+    globalThis.fetch=async url => {
+      if (String(url).includes('chi-tiet-34-don-vi')) return new Response(officialPage,{status:200});
+      if (String(url).endsWith('/sap-nhap.html')) return new Response('<html><body>Danh sách tin</body></html>',{status:200});
+      return originalFetch(url);
+    };
+    const headers={authorization:'Bearer '+process.env.CRON_SECRET};
+    const response=await check.fetch(new Request('https://example.test/api/administration/check',{headers}));
+    assert.equal(response.status,200);
+    const result=await response.json();
+    assert.equal(result.observedCount,34);
+    assert.equal(result.existingCount,34);
+    assert.equal(result.appliedChanges,0);
+    const duplicate=await check.fetch(new Request('https://example.test/api/administration/check',{headers}));
+    assert.equal((await duplicate.json()).state,'already_checked');
+    const aliases=await fetch(base+'/api/administration/aliases');
+    assert.equal(aliases.status,200);
+    assert.deepEqual((await aliases.json()).aliases,[]);
+  } finally {
+    globalThis.fetch=originalFetch;
+    if (previous===undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET=previous;
+  }
+});
+
 test('dev AI API is routed to the real TypeScript handler', async () => {
   const response = await fetch(base + '/api/ai');
   assert.equal(response.status, 405);

@@ -103,6 +103,63 @@ nên cho AI trực tiếp sửa SVG hoặc lịch sử nếu thiếu bản đồ
 
 Trong năm 2026, nguồn chính thức hiện vẫn công bố **34 tỉnh/thành**; không tự giả định có đợt sáp nhập mới.
 
+## Đợt 6 — Tự bổ sung nội dung ngay trên localhost
+
+Đợt 6 thay đổi bộ quét từ **chỉ tạo ứng viên** sang **tự đăng các mục đạt
+điều kiện kiểm chứng tối thiểu**. Không cần Vercel, không chạy AI mỗi lần
+khách xem trang.
+
+### Khi chạy npm run dev
+
+- Sau khi Vite bắt đầu, tác vụ chạy **ở phía sau**, ưu tiên Thanh Hóa, Hà Nội,
+  Đồng Tháp, TP.HCM, Đà Nẵng rồi đến các tỉnh còn lại.
+- Tìm nhiều trang Wikipedia tiếng Việt cho địa điểm/đặc sản của cả tỉnh hiện
+  tại và các tỉnh cũ được sáp nhập.
+- Chỉ công khai các mục có bài viết nêu đúng tỉnh, định danh Wikidata,
+  ảnh pageimage thực sự từ Wikimedia Commons, giấy phép cho phép sử dụng
+  thương mại và ghi công tác giả. Địa điểm còn cần tọa độ.
+- **Những mục còn thiếu bằng chứng vẫn để pending; không tự bịa nội dung hay
+  dùng ảnh tỉnh thay cho ảnh món ăn.** Các nguồn thuộc Wikimedia không phải
+  nhiều nguồn độc lập, nên kiểm tra này chưa thể đảm bảo chính xác tuyệt đối.
+- Lưu phiên bản đã duyệt vào SQLite local; dữ liệu thủ công được giữ nguyên.
+  Khi tab tỉnh đang mở, giao diện sẽ đọc lại nội dung sau mỗi 45 giây hoặc
+  khi bạn quay lại tab.
+- Ghi nhận từng nhóm tỉnh đã quét; không kiểm tra lại trong vòng 7 ngày trừ
+  khi yêu cầu `--force`. Có thể tắt bộ quét tự động bằng cách cấu hình
+  `LOCAL_CONTENT_AUTORUN=0` trong môi trường trước khi chạy Vite.
+
+### Quét ngay một tỉnh trên localhost
+
+```powershell
+cd "D:\dự án\vietnamtravel"
+git pull origin main
+npm run catalog:enrich -- --province "Thanh Hoa" --force
+npm run dev
+```
+
+Lệnh `catalog:enrich` dùng SQLite local `.data/vietnamtravel.sqlite`,
+không ghi vào Turso online và không cần Gemini API key. Tên tỉnh phải là
+ID từ `src/data/provincesData.ts` (ví dụ: `Dong Thap`, `Ha Noi`).
+Không truyền `--province` sẽ quét mọi tỉnh, mất nhiều thời gian hơn.
+
+Theo dõi terminal với thông báo `new N, pending M`. Nếu N = 0, nguồn có
+thể thiếu bài viết, ảnh đúng hoặc giấy phép phù hợp; đây không phải bằng chứng
+rằng có 8–15 điểm/món của tỉnh. **Không tạo mục giả để đủ số lượng.**
+
+**Nếu localhost đang kết nối Turso qua `TURSO_DATABASE_URL`:** bộ quét tự
+động khi chạy Vite chủ động bỏ qua để bảo vệ dữ liệu online. Để thử trên
+SQLite cục bộ, chạy với cấu hình Turso trống. Khi triển khai Production,
+Cron đã có logic kiểm chứng tương tự, nhưng còn cần `CRON_SECRET`,
+cấu hình backend và một lần triển khai Vercel.
+
+### Phần chưa hoàn thành
+
+- Quét và chuẩn hóa tất cả mốc **lịch sử hình thành** từ nguồn chính thức.
+- Tự động phát hành các mục không có ảnh Wikimedia đạt chuẩn hoặc không có
+  thông tin địa phương đầy đủ.
+- Dữ liệu chuẩn về từng món ăn và địa điểm từ nhiều nguồn độc lập.
+- Tự sửa địa giới hành chính mới và bản đồ SVG.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

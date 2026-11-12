@@ -544,6 +544,43 @@ https://www.openstreetmap.org/copyright.
 các trang chính thức/VCCA; với các trang đó cần API, hợp đồng dữ liệu
 hoặc phương án có sự cho phép rõ ràng trước.
 
+## Sửa timeout khi truy vấn Overpass cho Cần Thơ
+
+Trong lần chạy thực tế:
+
+```text
+OSM provinces selected: Can Tho
+OSM ERROR Can Tho TimeoutError: The operation was aborted due to timeout
+DONE { provinces: 0, fetched: 0, newEntities: 0, failures: 1 }
+```
+
+Nguyên nhân khả dĩ: truy vấn cũ ghép `tourism`, `historic` và `natural`
+trên toàn địa bàn trong một lượt rồi timeout trong 36 giây. Chương trình
+chưa nhận được kết quả, **không phải Cần Thơ không có thắng cảnh**.
+
+Bộ quét mới thử máy chủ Overpass của
+[Private.coffee](https://overpass.private.coffee/api/interpreter)
+với truy vấn chỉ chứa nhóm `tourism` (có giới hạn kết quả). Nếu thành
+công, nó mới thử riêng `historic/natural`. Khi một yêu cầu quá tải,
+hệ thống có thể thử máy chủ dự phòng `overpass-api.de` bằng **truy vấn
+thu hẹp hơn**, tối đa một lần dự phòng, không gửi lại truy vấn quá nặng.
+Khi đã dùng dự phòng sẽ dừng truy vấn các nhóm tiếp theo để giảm tải.
+Báo lỗi HTTP 429 sẽ dừng ngay để tôn trọng giới hạn dịch vụ, thay vì
+tấn công API bằng lặp vô hạn. JSON báo lỗi `remark` của Overpass cũng
+được nhận diện, không bị hiểu nhầm là một tỉnh có 0 địa điểm.
+
+```powershell
+git pull origin main
+npm run catalog:osm -- --province Can_Tho
+```
+
+Nếu vẫn nhận lỗi `OSM_FETCH_UNAVAILABLE`, đó là tình trạng nguồn công
+cộng không đáp ứng được ngay lúc đó. **Không nên chạy liên tục**
+`--all` khi Cần Thơ chưa chạy ổn; có thể thử lại một lần vào thời điểm
+khác. Những ứng viên OSM nếu có chỉ được lưu ở trạng thái chờ kiểm chứng,
+chưa xuất hiện trên website. Địa giới tỉnh sau 2025 có thể chưa đầy đủ
+trong dữ liệu vùng hành chính `admin_level=4` của OSM.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

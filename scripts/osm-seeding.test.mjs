@@ -31,13 +31,17 @@ const fixtures={elements:[
     tags:{name:'Làng du lịch Mỹ Khánh',tourism:'attraction'}},
 ]};
 const fake=async(url,opts)=>{
-  assert.equal(url,'https://overpass-api.de/api/interpreter');
+  assert.ok(['https://overpass.private.coffee/api/interpreter',
+    'https://overpass-api.de/api/interpreter'].includes(url));
   assert.equal(opts.method,'POST');
   assert.equal(opts.redirect,'error');
   const body=new URLSearchParams(opts.body);
   assert.match(String(body.get('data')),/Cần Thơ/);
   assert.match(String(body.get('data')),/admin_level/);
   assert.match(String(body.get('data')),/out center/);
+  assert.ok(!String(body.get('data')).includes('nwr["natural"]') ||
+    !String(body.get('data')).includes('nwr["tourism"]'),
+    'Heavy tourist and heritage categories are no longer combined');
   return Response.json(fixtures);
 };
 
@@ -101,4 +105,39 @@ test('OSM CLI accepts PowerShell/npm caret-escaped province and no-space argumen
   assert.throws(()=>resolveOsmCliArgs(['--province','Unknown_Province'],provincesData));
   assert.throws(()=>resolveOsmCliArgs(['--province','Hoang_Sa'],provincesData));
   assert.throws(()=>resolveOsmCliArgs(['--force'],provincesData));
+});
+
+
+test('timeout on the first Overpass server falls back to smaller query on second server',async()=>{
+  const calls=[];
+  const alternate=async(url,opts)=>{
+    const data=new URLSearchParams(opts.body).get('data');
+    calls.push({url,data});
+    if(url==='https://overpass.private.coffee/api/interpreter')
+      throw new Error('TimeoutError: The operation was aborted due to timeout');
+    assert.equal(url,'https://overpass-api.de/api/interpreter');
+    assert.ok(data.includes('^(attraction|museum)$'),
+      'Fallback must narrow tag list, not repeat expensive full-province query');
+    return Response.json(fixtures);
+  };
+  const places=await queryOsmProvince('Can Tho',alternate);
+  assert.equal(places.length,3);
+  assert.equal(calls.length,2,'Do not repeat expensive queries or scan a second phase after fallback');
+});
+
+test('Overpass rate limit aborts new queries instead of hammering backup server',async()=>{
+  let requests=0;
+  const limited=async()=>{requests++;return new Response('rate limited',{status:429});};
+  await assert.rejects(()=>queryOsmProvince('Can Tho',limited),/OVERPASS_RATE_LIMIT_429/);
+  assert.equal(requests,1,'Avoid sending more OSM queries after a 429');
+});
+
+test('Overpass 200 with runtime error remark is not counted as empty province',async()=>{
+  const calls=[];
+  const failing=async(url,opts)=>{
+    calls.push(url);
+    return Response.json({remark:'runtime error: Query timed out',elements:[]});
+  };
+  await assert.rejects(()=>queryOsmProvince('Can Tho',failing),/OVERPASS_RUNTIME/);
+  assert.equal(calls.length,2,'Try a single reduced backup query, then report real failure');
 });

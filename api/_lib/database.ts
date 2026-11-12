@@ -48,6 +48,33 @@ const schema = [
     query_key TEXT PRIMARY KEY, lat REAL, lon REAL,
     label TEXT NOT NULL, checked_at INTEGER NOT NULL
   )`,
+  // Additive, non-destructive catalog schema. Existing manual province data
+  // stays in source code until import and read-side fallback are tested.
+  // A candidate version must be approved before it can become the active item.
+  `CREATE TABLE IF NOT EXISTS travel_content_versions (
+    version_id TEXT PRIMARY KEY,
+    content_id TEXT NOT NULL,
+    province_id TEXT NOT NULL,
+    section TEXT NOT NULL CHECK(section IN ('overview','history','places','cuisine')),
+    payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+    source_kind TEXT NOT NULL CHECK(source_kind IN ('legacy_manual','verified_external','ai_draft')),
+    source_ref TEXT,
+    reviewed_status TEXT NOT NULL DEFAULT 'pending'
+      CHECK(reviewed_status IN ('pending','approved','rejected')),
+    checked_at TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS content_versions_item_idx ON travel_content_versions(content_id,created_at DESC)',
+  `CREATE TABLE IF NOT EXISTS travel_content_items (
+    content_id TEXT PRIMARY KEY,
+    province_id TEXT NOT NULL,
+    section TEXT NOT NULL CHECK(section IN ('overview','history','places','cuisine')),
+    current_version_id TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(current_version_id) REFERENCES travel_content_versions(version_id)
+  )`,
+  'CREATE INDEX IF NOT EXISTS travel_content_province_idx ON travel_content_items(province_id,section)',
+
 ];
 
 const hosted = () => Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production';

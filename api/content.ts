@@ -44,7 +44,7 @@ function safeOverview(value: unknown): value is {
 
 export function mergeVerifiedContent(
   provinceId: ProvinceId,
-  entries: Array<{ content_id: unknown; section: unknown; payload_json: unknown }>,
+  entries: Array<Record<string, unknown>>,
 ): ProvinceDetailsCatalogItem {
   const base = provinceDetailsCatalog[provinceId];
   // A fresh copy avoids mutating the data authored by the original developer.
@@ -56,7 +56,7 @@ export function mergeVerifiedContent(
     const old = legacyById.get(contentId);
     if (old && (old.provinceId !== provinceId || old.section !== section)) continue;
     const value = safeJson(row.payload_json);
-    if (section === 'overview' && validOverview(value)) {
+    if (section === 'overview' && safeOverview(value)) {
       result.title = value.title;
       result.banner = value.banner;
       result.data.overview = value.overview;

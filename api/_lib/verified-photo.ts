@@ -21,6 +21,42 @@ export interface VerifiedCommonsPhoto {
   imageLicense:string;
   imageCreditUrl:string;
 }
+
+/** Retrieve a pageimage only if the source Wikipedia article belongs to the
+ * exact Wikidata entity on the card. Never search for a picture by word. */
+export async function verifiedArticlePageimage(args:{
+  articleUrl:string; wikidataId:string; fetcher?:typeof fetch;
+}):Promise<string|null>{
+  let url:URL;
+  try {url=new URL(args.articleUrl);} catch{return null;}
+  if(url.protocol!=='https:'||url.hostname!=='vi.wikipedia.org'||
+     !url.pathname.startsWith('/wiki/')||url.username||url.password)return null;
+  let title:string;
+  try{title=decodeURIComponent(url.pathname.slice(6)).replace(/_/g,' ');}catch{return null;}
+  if(title.length<3||title.length>180||title.includes('/')||!/^Q\d+$/.test(args.wikidataId))return null;
+  const api=new URL('https://vi.wikipedia.org/w/api.php');
+  api.search=new URLSearchParams({
+    action:'query',format:'json',formatversion:'2',
+    titles:title,prop:'pageprops|pageimages',piprop:'name',redirects:'1',
+  }).toString();
+  try{
+    const response=await (args.fetcher??fetch)(api.toString(),{
+      headers:{'User-Agent':UA,Accept:'application/json'},
+      redirect:'error',signal:AbortSignal.timeout(10000),
+    });
+    if(!response.ok)return null;
+    const raw=await response.text();
+    if(raw.length>500_000)return null;
+    const pages=asRecord(asRecord(JSON.parse(raw)).query).pages;
+    const page=Array.isArray(pages)?asRecord(pages[0]):{};
+    if(asRecord(page.pageprops).wikibase_item!==args.wikidataId)return null;
+    const filename=page.pageimage;
+    if(typeof filename!=='string'||filename.length>180||
+      !/\.(?:jpe?g|png|webp)$/i.test(filename)||filename.includes('/'))return null;
+    return filename;
+  }catch{return null;}
+}
+
 function commonsFileFromP18(item:RecordValue):string|null {
   const claims=asRecord(item.claims);
   const p18=Array.isArray(claims.P18)?claims.P18:[];
@@ -39,7 +75,7 @@ function commonsFileFromP18(item:RecordValue):string|null {
  */
 export async function findVerifiedCommonsPhoto(args:{
   wikidataId:string; articlePageimage?:string; articleThumbnail?:string;
-  wikidataEntry?:unknown; fetcher?:typeof fetch;
+  articleUrl?:string; wikidataEntry?:unknown; fetcher?:typeof fetch;
 }):Promise<VerifiedCommonsPhoto|null>{
   if(!/^Q\d+$/.test(args.wikidataId)) return null;
   const fetcher=args.fetcher??fetch;
@@ -65,7 +101,10 @@ export async function findVerifiedCommonsPhoto(args:{
   const articleFile=typeof args.articlePageimage==='string' &&
     args.articlePageimage.length<=180 &&
     /\.(?:jpe?g|png|webp)$/i.test(args.articlePageimage) &&
-    !args.articlePageimage.includes('/') ? args.articlePageimage : null;
+    !args.articlePageimage.includes('/') ? args.articlePageimage :
+    (args.articleUrl ? await verifiedArticlePageimage({
+      articleUrl:args.articleUrl,wikidataId:args.wikidataId,fetcher,
+    }) : null);
   // Prefer P18. The page's own cover is a fallback ONLY if the exact article
   // matches the entity QID and the image is the Wikipedia pageimage.
   const files=[p18,articleFile].filter((name):name is string=>Boolean(name));

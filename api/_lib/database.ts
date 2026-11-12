@@ -114,6 +114,18 @@ const schema = [
     approved INTEGER NOT NULL DEFAULT 0,
     pending INTEGER NOT NULL DEFAULT 0
   )`,
+  `CREATE TABLE IF NOT EXISTS travel_source_leads (
+    lead_id TEXT PRIMARY KEY, source_id TEXT NOT NULL,
+    article_url TEXT NOT NULL UNIQUE,
+    headline TEXT NOT NULL, summary TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'unknown',
+    province_id TEXT, subject TEXT NOT NULL DEFAULT '',
+    review_status TEXT NOT NULL DEFAULT 'pending'
+      CHECK(review_status IN ('pending','reviewed','discarded')),
+    first_seen_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS trusted_news_review_idx ON travel_source_leads(review_status,first_seen_at)',
+
 
 
 ];

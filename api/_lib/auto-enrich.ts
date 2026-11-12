@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { dbOne, dbQuery } from './database.js';
+import { findVerifiedCommonsPhoto } from './verified-photo.js';
 import { discoverWikipedia, type DiscoveryCandidate } from './discover-content.js';
 import { HISTORICAL_PROVINCE_ALIASES } from '../../src/data/historicalProvinceAliases.js';
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
@@ -105,7 +106,7 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
       ? page.categories.map(item=>String(asRecord(item).title ?? '').replace(/^Thể loại:\\s*/i,''))
         .filter(Boolean) : [];
     const wdResult = asRecord(await getJson(wikiUrl('www.wikidata.org',{
-      action:'wbgetentities', ids:itemId, props:'descriptions',
+      action:'wbgetentities', ids:itemId, props:'descriptions|claims',
       languages:'vi|en', languagefallback:'1',
     }),fetcher));
     const entry = asRecord(asRecord(wdResult.entities)[itemId]);
@@ -127,34 +128,16 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
           lat < 8 || lat > 24 || lon < 102 || lon > 110)
         return pending('Tọa độ không nằm trong phạm vi Việt Nam');
     }
-    // A photo is OPTIONAL. Never block a verified destination or food simply
-    // because Wikimedia has no licensed photo. The UI shows a neutral icon
-    // instead of a misleading image of a different destination.
-    let photo = '';
-    let attribution = 'Chưa có ảnh đã xác minh cho mục này.';
-    let license = '';
-    if (filename && imageName && normalized(imageName) === normalized(filename)) {
-      try {
-        const commons = asRecord(await getJson(wikiUrl('commons.wikimedia.org',{
-          titles:'File:' + imageName,prop:'imageinfo',iiprop:'extmetadata|url',iilimit:'1',
-        }),fetcher));
-        const pages = asRecord(commons.query).pages;
-        const file = Array.isArray(pages) ? asRecord(pages[0]) : {};
-        const infos = Array.isArray(file.imageinfo) ? file.imageinfo : [];
-        const info = asRecord(infos[0]);
-        const rights = stripHtml(asRecord(asRecord(info.extmetadata).LicenseShortName).value);
-        const artist = stripHtml(asRecord(asRecord(info.extmetadata).Artist).value);
-        const creditUrl = String(info.descriptionurl ?? '');
-        if (allowedLicense(rights) && artist.length >= 2 &&
-          creditUrl.startsWith('https://commons.wikimedia.org/wiki/File:')) {
-          photo = payload.image;
-          attribution = artist + ' · ' + rights + ' · ' + creditUrl;
-          license = rights;
-        }
-      } catch (error) {
-        console.warn('[auto-enrich] photo metadata unavailable, keeping verified text only', error);
-      }
-    }
+    // Wikidata P18 may provide a real, licensed image even when the
+    // Wikipedia article has no thumbnail. Never use arbitrary search images.
+    const verifiedPhoto=await findVerifiedCommonsPhoto({
+      wikidataId:itemId, wikidataEntry:entry,
+      articlePageimage:imageName, articleThumbnail:payload.image, fetcher,
+    });
+    const photo=verifiedPhoto?.image ?? '';
+    const attribution=verifiedPhoto?.imageAttribution ??
+      'Chưa có ảnh đúng chủ thể và được phép sử dụng.';
+    const license=verifiedPhoto?.imageLicense ?? '';
     return {
       approved:true,
       reason: photo

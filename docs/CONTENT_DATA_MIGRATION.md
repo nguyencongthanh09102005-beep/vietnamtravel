@@ -220,6 +220,67 @@ không phải cam kết đạt 8–15 mục ngay. Muốn bổ sung nhiều mục
 hơn cần thêm nguồn du lịch chính thức, OpenStreetMap và quy trình xác
 minh chéo không đánh đồng kết quả tìm kiếm với địa điểm thật.
 
+## Nguồn xác minh và ảnh đúng địa điểm (đợt kế tiếp)
+
+### Danh sách nguồn được kiểm tra
+
+`src/data/trustedSources.ts` phân tách nguồn theo đúng mục đích:
+
+- **Hành chính:** chinhphu.vn, vanban.chinhphu.vn; khi cập nhật cần kiểm tra **Nghị quyết 202/2025/QH15** (hiện là 34 tỉnh/thành). `gso.gov.vn` hỗ trợ số liệu thống kê theo từng năm, không được mang số liệu cũ áp vào đơn vị sáp nhập mới.
+- **Du lịch:** vietnamtourism.gov.vn, visithcmc.vn; thông tin điểm đến phải có nguồn đối chiếu, không tự copy nội dung/ảnh nếu chưa có quyền sử dụng.
+- **Ẩm thực:** `vcca.vn` (Hiệp hội Văn hóa Ẩm thực Việt Nam). **KHÔNG dùng `vcca.org.vn`** (Hiệp hội Sáng tạo và Bản quyền tác giả Việt Nam).
+- **Gợi ý cộng đồng:** vi.wikivoyage.org và vi.wikipedia.org + Wikidata; không coi bách khoa mở là nguồn chính thức duy nhất.
+- **RSS phát hiện tin:** vnexpress.net/rss/du-lich.rss, tuoitre.vn/rss/du-lich.rss, thanhnien.vn/rss/du-lich.rss; chỉ lưu metadata tối thiểu và link, tránh cào bài đầy đủ.
+- **Ảnh:** Wikimedia Commons cần kiểm tra giấy phép, nguồn file và ghi công. Unsplash API chỉ phù hợp ảnh banner/cảnh quan có người duyệt, cần API key, hotlink/attribution đúng quy định; **chưa tự động lấy ảnh món ăn từ Unsplash** vì dễ sai món.
+
+### Cách chạy nguồn RSS và Gemini trong localhost
+
+```powershell
+npm run catalog:sources
+npm run catalog:sources -- --ai
+```
+
+- Lệnh thứ nhất đọc RSS trên danh sách cố định rồi lưu bảng
+  `travel_source_leads` với `review_status=pending`, không đăng lên web.
+- `--ai` sử dụng GEMINI_API_KEY từ `.env.local` để **phân loại tiêu đề và
+  tóm tắt ngắn** (địa điểm, ẩm thực, lịch sử, tin tức), không tự tạo địa điểm,
+  món ăn, tọa độ, ảnh hoặc nội dung không được nguồn chứng minh. Kết quả AI
+  vẫn chờ đối chiếu độc lập trước khi đưa vào danh mục.
+- Khi mở `npm run dev`, nguồn RSS cũng được kiểm tra nền hằng ngày, nhưng
+  mặc định **không phát sinh chi phí Gemini**. Muốn bật AI phân loại nguồn ở
+  chế độ dev, đặt biến môi trường `LOCAL_SOURCE_AI_CLASSIFY=1` trong
+  `.env.local` (chỉ khi đã có GEMINI_API_KEY).
+- Không đồng bộ bộ quét source với Production Turso nếu môi trường local đang
+  có `TURSO_DATABASE_URL`; không cho user-facing request đợi AI.
+
+### Bổ sung ảnh cho các thẻ đã có sẵn
+
+```powershell
+npm run catalog:photos
+```
+
+- Chỉ bổ sung ảnh cho **thẻ tự động được xác minh ở bộ taxonomy v2** và
+  đang trống ảnh, không ghi đè ảnh thủ công.
+- Dùng **Wikidata P18** (ảnh của chính thực thể) hoặc ảnh cover của đúng
+  bài Wikipedia làm gợi ý; kiểm tra file Commons qua API, chỉ nhận ảnh với
+  giấy phép cho phép tái sử dụng và có tên tác giả/trang nguồn.
+- Ghi nguồn ảnh, ghi công và giấy phép trong phần popup; giữ nguyên phiên bản
+  cũ trong `travel_content_versions` để có thể rollback.
+- Nếu không tìm được ảnh chính xác, **giữ placeholder** thay vì ảnh sai tỉnh
+  hoặc ảnh món ăn không liên quan.
+- Khi `npm run dev` chạy, local sẽ chủ động sửa ảnh thiếu cho một nhóm
+  thẻ mỗi lượt; có thể chạy lệnh trên để xử lý nhiều thẻ nhanh hơn.
+
+### Chưa thay đổi gì
+
+- Website **chưa tự đăng** bài từ báo RSS; muốn xuất bản cần bước trích xuất
+  nội dung được cấp phép và kiểm chứng thực thể.
+- Cổng du lịch/vcca.vn hiện **được cấu hình thành nguồn hợp lệ** nhưng chưa
+  có bộ trích xuất có thể đảm bảo áp dụng cho mọi URL của từng website.
+- Không tự lấy ảnh từ báo hoặc trang du lịch thương mại rồi đăng lại.
+- Không đảm bảo tìm được ảnh cho tất cả địa danh/món ăn; tính đúng chủ thể,
+  giấy phép và nguồn vẫn được ưu tiên hơn sự đầy đủ hình ảnh.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

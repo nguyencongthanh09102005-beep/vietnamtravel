@@ -38,27 +38,27 @@ export async function stageCoreCandidate(value:CoreEvidence):
   const now=new Date().toISOString();
   const desc=(value.description??'').slice(0,450);
   const created=await dbQuery(
-    \`INSERT OR IGNORE INTO travel_core_candidates
+    `INSERT OR IGNORE INTO travel_core_candidates
       (candidate_id,province_id,section,subject_key,name,description,created_at,updated_at)
-      VALUES (?,?,?,?,?,?,?,?)\`,
+      VALUES (?,?,?,?,?,?,?,?)`,
     [id,value.provinceId,value.section,key,value.name,desc,now,now],
   );
   // Source references are strictly append-only, even when multiple news
   // headlines describe the exact same place.
   const reference=await dbQuery(
-    \`INSERT OR IGNORE INTO travel_core_candidate_sources
+    `INSERT OR IGNORE INTO travel_core_candidate_sources
       (candidate_id,url,source_id,source_role,independent_host,first_seen_at)
-      VALUES (?,?,?,?,?,?)\`,
+      VALUES (?,?,?,?,?,?)`,
     [id,value.sourceUrl,source.id,source.role,source.host,now],
   );
   return {id,newEntity:created.changes>0,newReference:reference.changes>0};
 }
 export async function stageRssCoreCandidates(limit=300) {
   const rows=await dbQuery(
-    \`SELECT source_id,article_url,headline,summary,kind,province_id,subject
+    `SELECT source_id,article_url,headline,summary,kind,province_id,subject
      FROM travel_source_leads WHERE review_status='pending'
        AND kind IN ('places','cuisine') AND province_id IS NOT NULL AND length(subject)>2
-     ORDER BY first_seen_at LIMIT ?\`,
+     ORDER BY first_seen_at LIMIT ?`,
     [Math.max(1,Math.min(limit,1000))],
   );
   const summary={examined:rows.rows.length,newEntities:0,newReferences:0,skipped:0};
@@ -82,8 +82,8 @@ export async function assessCoreGate(candidateId:string):Promise<CoreGate>{
     'SELECT * FROM travel_core_candidates WHERE candidate_id=?',[candidateId]);
   if(!row)return {eligible:false,reasons:['Không tìm thấy ứng viên'],officialSources:0,newsHosts:0};
   const sources=await dbQuery(
-    \`SELECT source_role,independent_host FROM travel_core_candidate_sources
-     WHERE candidate_id=?\`,[candidateId]);
+    `SELECT source_role,independent_host FROM travel_core_candidate_sources
+     WHERE candidate_id=?`,[candidateId]);
   const officialSources=sources.rows.filter(x=>
     ['official_tourism','cuisine_association'].includes(String(x.source_role))).length;
   const newsHosts=new Set(sources.rows.filter(x=>x.source_role==='news_discovery')
@@ -110,8 +110,8 @@ export async function assessCoreGate(candidateId:string):Promise<CoreGate>{
  * not automatic: news and generic photos need human/entity verification. */
 export async function refreshCoreReviewQueue(limit=400){
   const rows=await dbQuery(
-    \`SELECT candidate_id FROM travel_core_candidates
-     WHERE status IN ('pending','ready_for_review') LIMIT ?\`,
+    `SELECT candidate_id FROM travel_core_candidates
+     WHERE status IN ('pending','ready_for_review') LIMIT ?`,
     [Math.max(1,Math.min(limit,1000))],
   );
   const result={examined:0,ready:0,pending:0};

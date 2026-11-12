@@ -104,32 +104,92 @@ export async function classifyNewsLeads(leads:NewsLead[],generator:typeof genera
     });
   }catch{return leads;}
 }
+/**
+ * The RSS crawler only discovers article metadata. Gemini classification
+ * applies to stored pending leads as a SEPARATE step. This is essential when
+ * users first ran catalog:sources without --ai and classify later.
+ */
+export async function classifyStoredSourceLeads(options:{
+  generator?:typeof generateGeminiText; maxBatches?:number;
+}={}):Promise<{classified:number;aiBatches:number;remainingUnclassified:number;aiConfigured:boolean}> {
+  const aiConfigured=Boolean(process.env.GEMINI_API_KEY);
+  if(!aiConfigured)return {classified:0,aiBatches:0,remainingUnclassified:0,aiConfigured};
+  const maximum=Math.max(1,Math.min(18,Math.floor(options.maxBatches??12)));
+  let classified=0,aiBatches=0;
+  const generator=options.generator??generateGeminiText;
+  // Up to 8 per request: the prompt already limits itself to 8 leads.
+  const rows=await dbQuery(
+    `SELECT lead_id,source_id,article_url,headline,summary,kind,province_id,subject
+     FROM travel_source_leads WHERE kind='unknown' AND review_status='pending'
+     ORDER BY first_seen_at,lead_id LIMIT ?`,[maximum*8]);
+  for(let index=0;index<rows.rows.length;index+=8) {
+    const group=rows.rows.slice(index,index+8).map(row=>({
+      id:String(row.lead_id),sourceId:String(row.source_id),
+      articleUrl:String(row.article_url),title:String(row.headline),summary:String(row.summary),
+      kind:'unknown' as const,provinceId:null,subject:'',
+    }));
+    aiBatches++;
+    const classifiedGroup=await classifyNewsLeads(group,generator);
+    let changed=0;
+    for(const item of classifiedGroup) {
+      if(item.kind==='unknown')continue;
+      const update=await dbQuery(
+        `UPDATE travel_source_leads
+         SET kind=?,province_id=?,subject=?
+         WHERE lead_id=? AND kind='unknown' AND review_status='pending'`,
+        [item.kind,item.provinceId,item.subject,item.id]);
+      changed+=update.changes;
+    }
+    classified+=changed;
+    // Gemini completely unavailable / invalid JSON: don't exhaust quota
+    // by retrying a long backlog in the same invocation.
+    if(changed===0)break;
+  }
+  const pending=await dbQuery(
+    "SELECT COUNT(*) AS total FROM travel_source_leads WHERE kind='unknown' AND review_status='pending'");
+  return {
+    classified, aiBatches,
+    remainingUnclassified:Number(pending.rows[0]?.total??0),aiConfigured,
+  };
+}
+
 export async function scanTrustedNewsFeeds(options:{
-  fetcher?:typeof fetch; withAi?:boolean;
+  fetcher?:typeof fetch; withAi?:boolean; generator?:typeof generateGeminiText;
   onFeed?:(sourceId:string,count:number,error?:string)=>void;
-}={}):Promise<{scanned:number;inserted:number;classified:number;failed:number}>{
-  const results={scanned:0,inserted:0,classified:0,failed:0};
+}={}):Promise<{
+  scanned:number;inserted:number;classified:number;failed:number;
+  aiBatches:number;remainingUnclassified:number;aiConfigured:boolean;
+}>{
+  const results={
+    scanned:0,inserted:0,classified:0,failed:0,
+    aiBatches:0,remainingUnclassified:0,aiConfigured:Boolean(process.env.GEMINI_API_KEY),
+  };
   for(const source of VERIFIED_NEWS_FEEDS){
     try {
       const items=await fetchTrustedRss(source.id,options.fetcher);
       results.scanned+=items.length;
-      const candidates=options.withAi ? await classifyNewsLeads(items) : items;
       const now=new Date().toISOString();
-      for(const item of candidates) {
-        const result=await dbQuery(
+      for(const item of items) {
+        // RSS cannot publish anything; all new items start unclassified.
+        const inserted=await dbQuery(
           `INSERT OR IGNORE INTO travel_source_leads
            (lead_id,source_id,article_url,headline,summary,kind,province_id,subject,review_status,first_seen_at)
-           VALUES (?,?,?,?,?,?,?,?,'pending',?)`,
-          [item.id,item.sourceId,item.articleUrl,item.title,item.summary,
-            item.kind,item.provinceId,item.subject,now]);
-        results.inserted+=result.changes;
-        if(result.changes && item.kind!=='unknown')results.classified++;
+           VALUES (?,?,?,?,?,'unknown',NULL,'','pending',?)`,
+          [item.id,item.sourceId,item.articleUrl,item.title,item.summary,now]);
+        results.inserted+=inserted.changes;
       }
       options.onFeed?.(source.id,items.length);
     }catch(error){
       results.failed++;
       options.onFeed?.(source.id,0,String(error).slice(0,120));
     }
+  }
+  if(options.withAi) {
+    const review=await classifyStoredSourceLeads({generator:options.generator});
+    results.classified=review.classified;
+    results.aiBatches=review.aiBatches;
+    results.remainingUnclassified=review.remainingUnclassified;
+    results.aiConfigured=review.aiConfigured;
   }
   return results;
 }

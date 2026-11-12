@@ -35,7 +35,9 @@ export async function repairMissingPhotos(options:{
     summary.examined++;
     try{
       const photo=await findVerifiedCommonsPhoto({
-        wikidataId:payload.wikidataId,fetcher:options.fetcher??fetch,
+        wikidataId:payload.wikidataId,
+        articleUrl:String(payload.sourceUrl??row.source_ref??''),
+        fetcher:options.fetcher??fetch,
       });
       if(!photo){summary.unavailable++;options.onProgress?.(name,'unavailable');continue;}
       const updated={

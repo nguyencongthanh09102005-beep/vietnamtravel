@@ -281,6 +281,48 @@ npm run catalog:photos
 - Không đảm bảo tìm được ảnh cho tất cả địa danh/món ăn; tính đúng chủ thể,
   giấy phép và nguồn vẫn được ưu tiên hơn sự đầy đủ hình ảnh.
 
+## Sửa lỗi phân loại RSS đã lưu & bổ sung ảnh có xác minh
+
+Dấu hiệu nhận biết từ người dùng:
+
+```text
+catalog:photos: checked 27, new licensed photos 1, unavailable 26, errors 0
+catalog:sources: scanned 72, inserted 72, classified 0
+catalog:sources -- --ai: scanned 72, inserted 0, classified 0
+```
+
+- **RSS:** trước đây `INSERT OR IGNORE` chỉ lưu 72 bài ban đầu ở trạng thái
+  `unknown`. Khi chạy `--ai` sau, bộ quét bỏ qua bản đã có nên AI
+  **không cập nhật dữ liệu lưu** dù có thể đã gọi model. Giờ đây sẽ
+  truy vấn các bản `kind=unknown, review_status=pending` trong SQLite,
+  phân loại theo nhóm tối đa 8 bài/lượt, rồi `UPDATE` trực tiếp chỉ các
+  bản đang chờ. Các bài đã phân loại sẽ không cần gọi AI lần nữa.
+- Output thêm `aiBatches`, `remainingUnclassified`, `aiConfigured`.
+  `classified` là số bài **thực sự được lưu nhãn mới**, không phải số
+  bài AI nhìn thấy hoặc số bài được xuất bản. Khi thiếu Gemini key hoặc
+  model lỗi, báo rõ trong Terminal.
+- **Ảnh:** nhiều trang Wikidata không có P18. Khi backfill, nếu P18 trống,
+  hệ thống kiểm tra `pageimage` từ **đúng bài Wikipedia** của mục đó,
+  xác nhận `wikibase_item` trùng với QID rồi mới tải metadata giấy phép
+  từ Commons. Không dùng ảnh kết quả tìm kiếm chung theo từ khóa.
+- **Giới hạn:** vẫn có thể chỉ tìm được một phần ảnh. Dữ liệu không có
+  ảnh được xác minh sẽ tiếp tục dùng ô trạng thái trung tính.
+
+### Chạy trên localhost
+
+```powershell
+cd "D:\dự án\vietnamtravel"
+git pull origin main
+npm run catalog:sources -- --ai
+npm run catalog:photos
+npm run dev
+```
+
+Lệnh RSS sẽ xử lý cả bài đã lưu từ lượt chạy trước, không tạo 72 bản trùng.
+RSS chỉ tạo đề xuất **chờ kiểm chứng**, không tự đưa các tin tức lên
+danh sách Địa điểm/Ẩm thực. Bản thủ công không bị sửa, dữ liệu trên Turso
+online không bị đụng vào.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

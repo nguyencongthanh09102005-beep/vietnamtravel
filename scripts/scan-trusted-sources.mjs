@@ -1,5 +1,5 @@
 import { loadEnv } from 'vite';
-import { closeLocalDatabase } from '../.api-test-dist/api/_lib/database.js';
+import { closeLocalDatabase, dbQuery } from '../.api-test-dist/api/_lib/database.js';
 import { scanTrustedNewsFeeds } from '../.api-test-dist/api/_lib/trusted-feeds.js';
 
 const env=loadEnv('development',process.cwd(),'');
@@ -19,6 +19,10 @@ try{
     },
   });
   console.log('Source scan:',result);
+  const byKind=await dbQuery(
+    "SELECT kind,COUNT(*) AS total FROM travel_source_leads GROUP BY kind ORDER BY total DESC");
+  console.log('Saved RSS labels by type:',
+    Object.fromEntries(byKind.rows.map(row=>[String(row.kind),Number(row.total)])));
   if(args.includes('--ai')) {
     if(!result.aiConfigured) {
       console.log('AI NOT CONFIGURED: no GEMINI_API_KEY in local environment; all leads remain pending.');

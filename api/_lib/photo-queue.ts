@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { dbQuery } from './database.js';
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
+import { checkCoreSubjectSpecificity } from '../../src/utils/coreSubjectSpecificity.js';
 
 export interface ImageReviewCandidate {
   image:string; sourceUrl:string; sourceKind:'commons'|'flickr';
@@ -159,6 +160,11 @@ export async function enqueueImagesForReview(options:{
     let payload:Record<string,unknown>;
     try{payload=json(JSON.parse(String(row.payload_json)));}catch{continue;}
     if(payload.taxonomyGateVersion!==2||typeof payload.name!=='string'||payload.image)continue;
+    // Defense-in-depth: do not fetch art for whole cities/provinces, even if
+    // the caller forgot to run the cleanup command first.
+    const kind=String(row.section);
+    if(!['places','cuisine'].includes(kind) ||
+        !checkCoreSubjectSpecificity(payload.name,kind as 'places'|'cuisine').specific)continue;
     const id=String(row.province_id) as ProvinceId;
     const province=provinceDetailsCatalog[id]?.title??id;
     summary.checked++;

@@ -54,7 +54,9 @@ test('publishes only image-licensed, article-linked and region-matching content'
   assert.match(approved.payload.imageAttribution,/CC BY-SA/);
   assert.equal(approved.payload.wikidataId,'Q12345678');
   const bad=await assessCandidate(candidate,fetcherFor('CC BY-NC 4.0'));
-  assert.equal(bad.approved,false,'Noncommercial licenses must not be reused in a tourism website');
+  assert.equal(bad.approved,true,'Real supported content should remain publishable without a photo');
+  assert.equal(bad.payload.image,'','Restricted images must never be reused in a tourism website');
+  assert.equal(bad.payload.imageStatus,'pending');
   const wrongPlace=await assessCandidate({
     ...candidate,
     payload:{...candidate.payload,detail:intro.replaceAll('Thanh Hóa','Hà Nội')},
@@ -127,4 +129,39 @@ test('original handwritten destination is enriched without deleting source or hi
   assert.notEqual(active.rows[0].current_version_id,oldVersion);
   const history=await dbQuery('SELECT reviewed_status FROM travel_content_versions WHERE version_id=?',[oldVersion]);
   assert.equal(history.rows[0].reviewed_status,'approved','Old version retained for rollback');
+});
+
+test('missing Commons image does not suppress reliably located destination',async ()=>{
+  const noPhoto={...candidate,payload:{...candidate.payload,image:''}};
+  const verdict=await assessCandidate(noPhoto,fetcherFor());
+  assert.equal(verdict.approved,true);
+  assert.equal(verdict.payload.image,'');
+  assert.equal(verdict.payload.imageStatus,'pending');
+  assert.equal(verdict.payload.wikidataId,'Q12345678');
+  assert.ok(verdict.payload.imageAttribution.includes('Chưa có ảnh'));
+});
+
+test('a correct-source Wikidata item without licensed photo is still visible in API',async ()=>{
+  const noImageTitle='Hồ tham quan chưa có ảnh';
+  const noImageIntro='Hồ tham quan chưa có ảnh là hồ nước và điểm tham quan tại tỉnh Thanh Hóa, Việt Nam. '
+    +'Nơi đây là một địa điểm có cảnh quan và hoạt động tham quan. '.repeat(5);
+  const src=async url=>{
+    const u=new URL(url);
+    if(u.searchParams.get('generator')==='search') return Response.json({query:{pages:[{
+      title:noImageTitle,extract:noImageIntro,
+    }]}});
+    if(u.hostname==='vi.wikipedia.org') return Response.json({query:{pages:[{
+      title:noImageTitle,pageprops:{wikibase_item:'Q345678'},coordinates:[{lat:19.8,lon:105.7}],
+    }]}});
+    throw new Error('Should never request Commons when there is no image');
+  };
+  const refreshed=await enrichSection('Thanh Hoa','places',{fetcher:src,force:true});
+  assert.equal(refreshed.approved,1);
+  const response=await contentApi.fetch(new Request('https://example.test/api/content?provinceId=Thanh%20Hoa'));
+  assert.equal(response.status,200);
+  const payload=await response.json();
+  const item=payload.data.data.places.find(x=>x.name===noImageTitle);
+  assert.ok(item);
+  assert.equal(item.image,'');
+  assert.equal(item.wikidataId,'Q345678');
 });

@@ -81,7 +81,9 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
           )}
           {'sourceUrl' in item && typeof item.sourceUrl === 'string' && /^https:\/\//.test(item.sourceUrl) ? (
             <a className="mt-4 inline-flex text-xs font-medium text-blue-700 underline" href={item.sourceUrl}
-              target="_blank" rel="noopener noreferrer">Nguồn tham khảo <ExternalLink className="ml-1 h-3 w-3"/></a>
+              target="_blank" rel="noopener noreferrer">
+              {'wikidataId' in item && item.wikidataId ? 'Nguồn Wikipedia tiếng Việt · CC BY-SA' : 'Nguồn tham khảo'}
+              <ExternalLink className="ml-1 h-3 w-3"/></a>
           ) : null}
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-white px-5 py-4 sm:px-8">

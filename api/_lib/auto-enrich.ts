@@ -36,11 +36,11 @@ function strongProvinceMention(text: string, provinceId: ProvinceId): boolean {
   });
 }
 function relevantToSection(title: string, description: string, section: Section) {
-  const value = normalized(title + ' ' + description.slice(0,400));
+  const value = ' ' + normalized(title + ' ' + description.slice(0,400)) + ' ';
   if (/^(?:danh sach|danh muc|du lich |am thuc |kinh te |hanh chinh |giao thong |van hoa |lich su )/.test(normalized(title)))
     return false;
-  if (section === 'places') return /(di tich|danh lam|thang canh|khu du lich|tham quan|thac|vuon quoc gia|den|chua|lang co|hang|dong|nui|doi|cong vien|bao tang|thanh co|ho|bien|thap|cho noi|bai bien|dao|suoi|khu bao ton|nha tho)/.test(value);
-  return /(dac san|mon an|am thuc|banh|nem|chao|com|bun|pho|cha |che |mam|goi|rau|lau|canh|keo|mi |hu tieu|ca kho|thit|tom|bun)/.test(value);
+  if (section === 'places') return / (di tich|danh lam|thang canh|khu du lich|tham quan|thac|vuon quoc gia|den|chua|lang co|hang|dong|nui|doi|cong vien|bao tang|thanh co|ho|bien|thap|cho noi|bai bien|dao|suoi|khu bao ton|nha tho|cau) /.test(value);
+  return / (dac san|mon an|am thuc|banh|nem|chao|com|bun|pho|cha|che|mam|goi|rau|lau|canh|keo|mi|hu tieu|ca kho|thit|tom|suon|xoi) /.test(value);
 }
 async function getJson(url: URL, fetcher: typeof fetch) {
   if (!['vi.wikipedia.org','commons.wikimedia.org'].includes(url.hostname)
@@ -82,7 +82,6 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
   if (!strongProvinceMention(payload.detail, provinceId)) return pending('Không nêu rõ tỉnh trong phần giới thiệu');
   if (!relevantToSection(payload.name, payload.description, section)) return pending('Chưa xác định đúng loại nội dung');
   const filename = commonsFile(payload.image);
-  if (!filename) return pending('Thiếu ảnh Commons khớp bài viết, không thay bằng banner tỉnh');
   try {
     const pageRequest = wikiUrl('vi.wikipedia.org',{
       titles: payload.name, prop:'pageprops|coordinates|pageimages', pithumbsize:'640', redirects:'1',
@@ -97,31 +96,54 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
     if (Object.hasOwn(meta,'disambiguation')) return pending('Trang định hướng, không phải địa điểm/món ăn');
     if (normalized(String(page.title ?? '')) !== normalized(payload.name))
       return pending('Tiêu đề nguồn không trùng');
-    if (!imageName || normalized(imageName) !== normalized(filename))
-      return pending('Ảnh không thuộc trang nguồn đã xác minh');
-    if (section === 'places' && (!Array.isArray(page.coordinates) || page.coordinates.length === 0))
-      return pending('Địa điểm thiếu tọa độ tham chiếu');
-    const commons = asRecord(await getJson(wikiUrl('commons.wikimedia.org',{
-      titles:'File:' + imageName,prop:'imageinfo',iiprop:'extmetadata|url',iilimit:'1',
-    }),fetcher));
-    const files = asRecord(commons.query).pages;
-    const file = Array.isArray(files) ? asRecord(files[0]) : {};
-    const infos = Array.isArray(file.imageinfo) ? file.imageinfo : [];
-    const info = asRecord(infos[0]);
-    const license = stripHtml(asRecord(asRecord(info.extmetadata).LicenseShortName).value);
-    const credit = stripHtml(asRecord(asRecord(info.extmetadata).Artist).value);
-    if (!allowedLicense(license)) return pending('Giấy phép ảnh chưa xác minh hoặc không phù hợp');
-    if (!credit || credit.length < 2) return pending('Thiếu ghi công tác giả ảnh');
-    const creditUrl = String(info.descriptionurl ?? '');
-    if (!creditUrl.startsWith('https://commons.wikimedia.org/wiki/File:'))
-      return pending('Không có trang nguồn ảnh Commons');
+    if (section === 'places') {
+      if (!Array.isArray(page.coordinates) || page.coordinates.length === 0)
+        return pending('Địa điểm thiếu tọa độ tham chiếu');
+      const coords = asRecord(page.coordinates[0]);
+      const lat = Number(coords.lat), lon = Number(coords.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) ||
+          lat < 8 || lat > 24 || lon < 102 || lon > 110)
+        return pending('Tọa độ không nằm trong phạm vi Việt Nam');
+    }
+    // A photo is OPTIONAL. Never block a verified destination or food simply
+    // because Wikimedia has no licensed photo. The UI shows a neutral icon
+    // instead of a misleading image of a different destination.
+    let photo = '';
+    let attribution = 'Chưa có ảnh đã xác minh cho mục này.';
+    let license = '';
+    if (filename && imageName && normalized(imageName) === normalized(filename)) {
+      try {
+        const commons = asRecord(await getJson(wikiUrl('commons.wikimedia.org',{
+          titles:'File:' + imageName,prop:'imageinfo',iiprop:'extmetadata|url',iilimit:'1',
+        }),fetcher));
+        const pages = asRecord(commons.query).pages;
+        const file = Array.isArray(pages) ? asRecord(pages[0]) : {};
+        const infos = Array.isArray(file.imageinfo) ? file.imageinfo : [];
+        const info = asRecord(infos[0]);
+        const rights = stripHtml(asRecord(asRecord(info.extmetadata).LicenseShortName).value);
+        const artist = stripHtml(asRecord(asRecord(info.extmetadata).Artist).value);
+        const creditUrl = String(info.descriptionurl ?? '');
+        if (allowedLicense(rights) && artist.length >= 2 &&
+          creditUrl.startsWith('https://commons.wikimedia.org/wiki/File:')) {
+          photo = payload.image;
+          attribution = artist + ' · ' + rights + ' · ' + creditUrl;
+          license = rights;
+        }
+      } catch (error) {
+        console.warn('[auto-enrich] photo metadata unavailable, keeping verified text only', error);
+      }
+    }
     return {
-      approved:true, reason:'Bài viết Wikipedia có Wikidata, vùng liên quan rõ ràng và ảnh Commons có giấy phép phù hợp',
+      approved:true,
+      reason: photo
+        ? 'Đã kiểm tra bài viết, vị trí và giấy phép ảnh'
+        : 'Nội dung đạt kiểm tra nguồn; ảnh còn thiếu hoặc chưa xác minh',
       payload: {
         ...payload,
-        image:payload.image,
-        imageAttribution:credit + ' · ' + license + ' · ' + creditUrl,
-        imageLicense:license,
+        image: photo,
+        imageAttribution: attribution,
+        imageLicense: license || undefined,
+        imageStatus: photo ? 'verified' : 'pending',
         wikidataId:itemId,
         ...(section === 'places' ? { coordinates: page.coordinates } : {}),
       },
@@ -162,7 +184,7 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
     try{return [normalized(String((JSON.parse(String(row.payload_json)) as {name:string}).name)),
       String(row.source_kind)]}catch{return ['','unknown']}
   }));
-  for (const candidate of candidates.slice(0,8)) {
+  for (const candidate of candidates.slice(0,16)) {
     const name = normalized(candidate.payload.name);
     if (names.has(name) && names.get(name) !== 'legacy_manual') continue;
     // Match an original record by exact name to enrich it in-place via a new

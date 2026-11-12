@@ -10,7 +10,7 @@ export interface DiscoveryCandidate {
   provinceId: ProvinceId;
   section: 'places' | 'cuisine';
   sourceRef: string;
-  payload: { name: string; description: string; detail: string; image: string; sourceUrl: string; imageAttribution: string; imageLicense?: string; wikidataId?: string; coordinates?: unknown };
+  payload: { name: string; description: string; detail: string; image: string; sourceUrl: string; imageAttribution: string; imageLicense?: string; imageStatus?: 'verified' | 'pending'; wikidataId?: string; coordinates?: unknown };
 }
 
 function normalize(value: string) {
@@ -53,7 +53,7 @@ export function parseWikipediaSuggestions(
       ? page.thumbnail as Record<string, unknown> : {};
     const image = typeof thumbnail.source === 'string' &&
       thumbnail.source.startsWith('https://upload.wikimedia.org/')
-      ? thumbnail.source : provinceDetailsCatalog[provinceId].banner;
+      ? thumbnail.source : ''; // An unrelated province banner must NEVER represent a specific item.
     const sourceRef = 'https://vi.wikipedia.org/wiki/' + encodeURIComponent(title.replace(/ /g, '_'));
     const payload = {
       name: title,
@@ -63,7 +63,7 @@ export function parseWikipediaSuggestions(
       sourceUrl: sourceRef,
       imageAttribution: image.startsWith('https://upload.wikimedia.org/')
         ? 'Ảnh Wikimedia: cần xác minh giấy phép và tác giả trước khi xuất bản.'
-        : 'Ảnh minh họa của tỉnh, chưa phải ảnh xác minh địa điểm/món ăn.',
+        : 'Chưa tìm được ảnh có giấy phép phù hợp; hiển thị biểu tượng thay ảnh.',
     };
     const contentId = 'wiki_' + digest(provinceId + '|' + section + '|' + name).slice(0, 32);
     candidates.push({

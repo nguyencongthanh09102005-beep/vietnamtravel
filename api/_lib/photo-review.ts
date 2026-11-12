@@ -1,6 +1,7 @@
 import { dbOne, dbQuery } from './database.js';
 import { photoVersionId } from './verified-photo.js';
 import { normalizedSubjectKey } from '../../src/utils/contentQuality.js';
+import { checkCoreSubjectSpecificity } from '../../src/utils/coreSubjectSpecificity.js';
 import type { ProvinceId } from '../../src/data/provincesData.js';
 
 export async function reviewPhotoImage(imageId:string,action:'approve'|'reject'):
@@ -13,6 +14,10 @@ export async function reviewPhotoImage(imageId:string,action:'approve'|'reject')
   const provinceId=String(row.province_id) as ProvinceId;
   const section=String(row.section);
   const contentId=String(row.content_id);
+  if(!['places','cuisine'].includes(section) ||
+      !checkCoreSubjectSpecificity(String(row.subject_name),
+         section as 'places'|'cuisine').specific)
+    return {ok:false,reason:'GENERIC_SUBJECT_NOT_REVIEWABLE',attached:false};
   const matches=(name:string)=>normalizedSubjectKey(name,provinceId)===
     normalizedSubjectKey(String(row.subject_name),provinceId);
   const core=await dbOne('SELECT name,status,image_url FROM travel_core_candidates WHERE candidate_id=?',[contentId]);

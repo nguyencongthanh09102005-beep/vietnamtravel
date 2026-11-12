@@ -3,6 +3,7 @@ import { dbQuery, dbOne } from './database.js';
 import { trustedSourceForUrl } from '../../src/data/trustedSources.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 import { isSubjectExcluded, normalizedSubjectKey } from '../../src/utils/contentQuality.js';
+import { checkCoreSubjectSpecificity } from '../../src/utils/coreSubjectSpecificity.js';
 
 export type CoreSection='places'|'cuisine';
 export interface CoreEvidence {
@@ -29,7 +30,8 @@ export async function stageCoreCandidate(value:CoreEvidence):
   Promise<{id:string;newEntity:boolean;newReference:boolean}|null>{
   if(!supportedProvince(value.provinceId)||!['places','cuisine'].includes(value.section)||
     typeof value.name!=='string'||value.name.length<3||value.name.length>140||
-    isSubjectExcluded(value.name,value.section,value.description??''))return null;
+    isSubjectExcluded(value.name,value.section,value.description??'') ||
+    !checkCoreSubjectSpecificity(value.name,value.section).specific)return null;
   const source=classifyUrl(value.sourceUrl);
   if(!source)return null;
   const key=normalizedSubjectKey(value.name,value.provinceId);
@@ -94,6 +96,10 @@ export async function assessCoreGate(candidateId:string):Promise<CoreGate>{
   if(!['places','cuisine'].includes(kind) ||
       isSubjectExcluded(String(row.name),kind as CoreSection,String(row.description)))
     reasons.push('Sai nhóm nội dung');
+  if(['places','cuisine'].includes(kind)){
+    const specificity=checkCoreSubjectSpecificity(String(row.name),kind as CoreSection);
+    if(!specificity.specific)reasons.push(specificity.reason);
+  }
   if(officialSources===0&&newsHosts<2)
     reasons.push('Cần nguồn du lịch/ẩm thực có thẩm quyền hoặc hai báo thuộc tổ chức độc lập');
   if(String(row.detail).trim().length<180)
@@ -133,4 +139,37 @@ export async function refreshCoreReviewQueue(limit=400){
     if(gate.eligible)result.ready++;else result.pending++;
   }
   return result;
+}
+
+/** Non-destructive quarantine of known-generic RSS core candidates. Does not
+ * remove original RSS leads, hand-authored catalog content or version history.
+ * Pending images attached to those candidates must never be approvable. */
+export async function quarantineGenericCoreCandidates():Promise<{
+  examined:number;rejected:number;imagesRejected:number;
+}>{
+  const rows=await dbQuery(
+    `SELECT candidate_id,name,section FROM travel_core_candidates
+     WHERE status IN ('pending','ready_for_review') ORDER BY candidate_id`,
+  );
+  const summary={examined:rows.rows.length,rejected:0,imagesRejected:0};
+  for(const row of rows.rows){
+    const section=String(row.section) as CoreSection;
+    const check=checkCoreSubjectSpecificity(String(row.name),section);
+    if(check.specific)continue;
+    const id=String(row.candidate_id);
+    const changed=await dbQuery(
+      `UPDATE travel_core_candidates SET status='rejected',updated_at=?
+       WHERE candidate_id=? AND status IN ('pending','ready_for_review')`,
+      [new Date().toISOString(),id],
+    );
+    summary.rejected+=changed.changes;
+    if(changed.changes) {
+      const photos=await dbQuery(
+        `UPDATE travel_image_candidates SET state='rejected'
+         WHERE content_id=? AND state='pending'`,[id],
+      );
+      summary.imagesRejected+=photos.changes;
+    }
+  }
+  return summary;
 }

@@ -10,8 +10,14 @@ if(args.length>1||args.some(x=>!/^--(approve|reject)=photo_[a-f0-9]{44}$/.test(x
   throw Error('Usage: npm run catalog:image-review [-- --approve=photo_... | --reject=photo_...]');
 const { dbQuery,closeLocalDatabase } =
   await import('../.api-test-dist/api/_lib/database.js');
+const { quarantineGenericCoreCandidates } =
+  await import('../.api-test-dist/api/_lib/core-candidates.js');
 const { reviewPhotoImage }=await import('../.api-test-dist/api/_lib/photo-review.js');
 try {
+  const cleanup=await quarantineGenericCoreCandidates();
+  if(cleanup.rejected||cleanup.imagesRejected)
+    console.log('Generic RSS candidates quarantined:',cleanup.rejected,
+      'pending images rejected:',cleanup.imagesRejected);
   const actionArg=args[0];
   if(actionArg) {
     const action=actionArg.startsWith('--approve=')?'approve':'reject';

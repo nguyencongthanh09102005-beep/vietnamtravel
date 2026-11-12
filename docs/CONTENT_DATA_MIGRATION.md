@@ -438,6 +438,50 @@ chứng cứ độc lập và ảnh đã được chọn chỉ được chuyển
   cấp ứng viên để kiểm tra, khác với `catalog:photos` tự động xác minh
   ảnh gắn đúng QID trước đó.
 
+## Sửa lỗi tên đơn vị hành chính lọt vào ứng viên RSS (log localhost)
+
+Lượt chạy thực tế có 17 ứng viên, `ready=0`. Một số mục là **tên tỉnh
+hoặc thành phố** chứ không phải địa điểm tham quan: `Hà Nội` trong
+Ẩm thực, `TP.HCM`, `Huế`, `Đà Nẵng`, `Nha Trang`, `Quy Nhơn`,
+`Lâm Đồng`, `Quảng Ninh`. `Di sản TP.HCM` chỉ là chủ đề tổng hợp.
+`Sơn Tây Thượng` là tên xã theo Nghị quyết 1677/NQ-UBTVQH15 (2025)
+(https://xaydungchinhsach.chinhphu.vn/toan-van-nghi-quyet-so-1677-nq-ubtvqh15-sap-xep-cac-dvhc-cap-xa-cua-tinh-quang-ngai-nam-2025-119250616205046842.htm).
+
+Tìm ảnh cho những chủ thể quá chung chung này tốn lượt API và gợi ra
+ảnh bản đồ/thắng cảnh không tương ứng (ví dụ ảnh vùng TP.HCM).
+**Không bấm duyệt ảnh của những mục đó.**
+
+Bản sửa này:
+
+- `stageCoreCandidate`: kiểm tra tên tỉnh đang dùng + các tỉnh cũ và
+  những thành phố/xã đã phát hiện từ RSS; chặn trước khi lưu.
+- `assessCoreGate`: chặn lại ở bước quyết định xuất bản ngay cả khi
+  bản ghi cũ đã nằm trong SQLite.
+- `catalog:core-stage`: cách ly các ứng viên `pending`/ `ready_for_review`
+  quá chung chung từ lượt quét cũ bằng `status=rejected`, **không xóa
+  nguồn RSS và lịch sử**. Đồng thời đánh dấu `rejected` những ảnh `pending`
+  gắn với các ứng viên này.
+- `catalog:image-queue`: cũng tự kiểm tra cách ly; tuyệt đối không tìm
+  ảnh mới cho tên tỉnh/thành/chủ đề mơ hồ.
+- `catalog:image-review`: không cho phép duyệt ảnh generic dù chưa
+  chạy cách ly. Chỉ chọn ảnh sau khi đối chiếu nguồn và nội dung thật.
+
+Thử trên local SQLite:
+
+```powershell
+cd "D:\dự án\vietnamtravel"
+git pull origin main
+npm run catalog:core-stage
+npm run catalog:image-review
+npm run catalog:image-queue -- --max=25
+```
+
+Lưu ý: **không tự sửa 17 ứng viên thành những địa điểm mới**. Những tên
+tỉnh/xã được phân loại lại, còn các mục cụ thể như Làng du lịch Mỹ Khánh,
+Cầu Rồng, Hồ Gươm, Fansipan vẫn chờ nguồn và ảnh. Để đạt mục tiêu số
+lượng cho đủ 34 tỉnh cần thêm dữ liệu nền từ nguồn du lịch chính thức,
+chưa thể giải quyết bằng việc phân loại RSS hoặc tăng số lượt tìm ảnh.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

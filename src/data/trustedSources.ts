@@ -6,7 +6,7 @@
  * NEVER turn a mention of tourism/food into a published card by itself.
  */
 export type SourceRole = 'official_admin' | 'official_statistics' | 'official_tourism' |
-  'cuisine_association' | 'travel_guide' | 'news_discovery' | 'open_photo';
+  'cuisine_association' | 'travel_guide' | 'news_discovery' | 'open_photo' | 'open_geodata';
 export interface TrustedSource {
   id: string;
   role: SourceRole;
@@ -26,6 +26,12 @@ export const TRUSTED_SOURCES: ReadonlyArray<TrustedSource> = [
     verifiedLabel:'Cơ quan thống kê; kiểm tra năm và đơn vị hành chính',canAutopublish:false},
   {id:'vietnamtourism',role:'official_tourism',host:'vietnamtourism.gov.vn',homepage:'https://vietnamtourism.gov.vn/',
     verifiedLabel:'Cục Du lịch Quốc gia Việt Nam',canAutopublish:false},
+  {id:'vietnamtravel_official',role:'official_tourism',host:'vietnam.travel',
+    homepage:'https://vietnam.travel/vi/',
+    verifiedLabel:'Cổng du lịch chính thức; CẤM scraping nội dung không được cấp phép theo điều khoản 2026; chỉ làm nguồn đối chiếu/link',canAutopublish:false},
+  {id:'openstreetmap',role:'open_geodata',host:'openstreetmap.org',
+    homepage:'https://www.openstreetmap.org/copyright',
+    verifiedLabel:'OpenStreetMap ODbL — bản đồ dữ liệu mở; giữ ghi công và kiểm chứng địa điểm',canAutopublish:false},
   {id:'visithcmc',role:'official_tourism',host:'visithcmc.vn',homepage:'https://visithcmc.vn/',
     verifiedLabel:'Cổng Du lịch TP.HCM',canAutopublish:false},
   {id:'vcca_food',role:'cuisine_association',host:'vcca.vn',homepage:'https://vcca.vn/',

@@ -175,6 +175,22 @@ const schema = [
     UNIQUE(content_id,source_url)
   )`,
   'CREATE INDEX IF NOT EXISTS travel_image_pending_idx ON travel_image_candidates(content_id,state)',
+  `CREATE TABLE IF NOT EXISTS travel_external_geodata (
+    osm_type TEXT NOT NULL CHECK(osm_type IN ('node','way','relation')),
+    osm_id INTEGER NOT NULL,
+    candidate_id TEXT NOT NULL,
+    province_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    category TEXT NOT NULL,
+    source_url TEXT NOT NULL,
+    license TEXT NOT NULL,
+    checked_at TEXT NOT NULL,
+    PRIMARY KEY (osm_type,osm_id)
+  )`,
+  'CREATE INDEX IF NOT EXISTS travel_osm_by_province_idx ON travel_external_geodata(province_id)',
+
 
 
 

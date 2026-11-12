@@ -359,6 +359,85 @@ npm run dev
 Không cần xóa bản ghi RSS, không chỉnh dữ liệu thủ công hoặc Turso online.
 Bộ lấy ảnh có thể tự chạy nền khi `npm run dev` theo cấu hình cũ.
 
+## Core Seeding + RSS Radar + Hàng đợi ảnh (bản nền an toàn)
+
+**Thực tế trước nâng cấp:** 72 bài RSS đã được phân loại: 51 tin tức,
+19 bài ứng viên địa điểm, 2 bài ứng viên ẩm thực; 25 thẻ được xác minh
+vẫn thiếu ảnh. **Không có nghĩa 21 ứng viên là 21 địa danh/món ăn khác nhau.**
+
+Hệ thống mới giữ ba tầng dữ liệu **độc lập**:
+
+- `travel_source_leads`: RSS Radar. Chỉ tiêu đề, tóm tắt và URL để phát
+  hiện bài mới. Không tự đăng.
+- `travel_core_candidates` + `travel_core_candidate_sources`: một
+  thực thể duy nhất cho mỗi `province_id + section + tên chuẩn hóa`, các
+  link bài gốc là bằng chứng riêng biệt. Ngăn trùng `Don Quảng Ngãi` và
+  `Don (món ăn)`. Cả 34 tỉnh được hỗ trợ trên schema; số lượng mục mới
+  phụ thuộc nguồn chính thức, **chưa cam kết 8–15**.
+- `travel_image_candidates`: các ảnh từ Commons tìm theo từ khóa hoặc
+  Flickr (tùy chọn, có key và quyền). **Ảnh tìm theo từ khóa KHÔNG
+  tự hiển thị** trên website; mỗi ảnh có nguồn, giấy phép, tác giả, kích
+  thước và tình trạng duyệt.
+
+### Chạy trên máy dùng local SQLite
+
+```powershell
+cd "D:\dự án\vietnamtravel"
+git pull origin main
+
+# Gom 21 bài đã phân loại trước đây theo thực thể, kèm link nguồn
+npm run catalog:core-stage
+
+# Tạo tối đa 5 ảnh gợi ý/chủ thể vào hàng đợi (không đăng)
+npm run catalog:image-queue -- --max=25
+
+# Xem ảnh và URL nguồn chờ duyệt
+npm run catalog:image-review
+
+# Sau khi người quản trị thật sự kiểm tra một ảnh:
+npm run catalog:image-review -- --approve=photo_<mã_ảnh>
+# Hoặc từ chối:
+npm run catalog:image-review -- --reject=photo_<mã_ảnh>
+```
+
+Lệnh duyệt cần mã `photo_...` **thật** in ra từ lệnh `catalog:image-review`.
+Không có quyền truy cập từ phía khách. Ứng viên core sau khi có đủ mô tả,
+chứng cứ độc lập và ảnh đã được chọn chỉ được chuyển
+`ready_for_review`, **không tự đẩy lên website**.
+
+### Quy tắc nguồn & bản quyền
+
+- Một nguồn cổng du lịch/hiệp hội ẩm thực phù hợp **hoặc** hai nguồn báo
+  thuộc hai tòa soạn khác nhau mới *đủ điều kiện xem xét*, không mặc định
+  chứng minh mọi chi tiết. Tin RSS ngắn không đạt mô tả chi tiết.
+- Ảnh phải hợp chủ thể, tác giả, điều kiện giấy phép; người duyệt phải
+  kiểm tra thực tế trước khi xác nhận.
+- Wikimedia Commons: tìm được file CC BY / CC BY-SA / CC0 có giấy phép,
+  tác giả, độ phân giải >= 800px và tỷ lệ gần ngang thì **chỉ đưa vào queue**.
+- Flickr: chỉ dùng **4,5,9,11,12** (CC BY/CC BY-SA/CC0), không dùng
+  1,2,3 (NC), 6 (ND), 10 (Public Domain Mark chưa phải xác nhận quyền).
+  Flickr API yêu cầu tài khoản/khóa được chấp thuận; nếu dành cho website
+  thương mại, cần quyền API thương mại. Nếu đã được chấp thuận, đặt cả
+  `FLICKR_API_KEY` và `FLICKR_API_COMMERCIAL_APPROVED=1` trong
+  `.env.local`. Không có key thì chỉ tìm Commons.
+- **Không cào ảnh thương mại** từ trang du lịch/báo rồi tự đăng. Chỉ
+  dùng URL ảnh từ nguồn khác khi có bằng chứng cho phép tái sử dụng.
+- Unsplash chưa tự nhập ảnh từ API: cần API key, giữ nguyên hotlinked
+  URLs, ghi credit theo điều khoản và kiểm tra chính xác chủ thể.
+
+### Phần chưa triển khai
+
+- Scraper chuyên biệt cho từng cổng du lịch/VCCA và bộ dữ liệu nền 34 tỉnh.
+- Tự động tạo mô tả chi tiết đã kiểm chứng từ bài nguồn; không biến tóm
+  tắt RSS thành bài giới thiệu.
+- Giao diện quản trị duyệt ảnh **một lần bấm**: bản này sử dụng lệnh
+  quản trị có chọn đúng image ID, không phải form công khai.
+- Tự động đẩy ứng viên core lên website/Turso. Cần quy trình duyệt và
+  xác minh chéo trước khi công bố; không đăng bừa để đủ số lượng.
+- **Không bảo đảm** giải quyết toàn bộ 25 ảnh còn thiếu. Queue chỉ cung
+  cấp ứng viên để kiểm tra, khác với `catalog:photos` tự động xác minh
+  ảnh gắn đúng QID trước đó.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

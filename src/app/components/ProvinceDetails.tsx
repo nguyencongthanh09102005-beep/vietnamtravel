@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentType } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, Clock, ExternalLink, Info, MapPin, Utensils } from 'lucide-react';
-import { createGoogleMapsSearchUrl } from '../../utils/googleMaps';
+import { Camera, Clock, Info, MapPin, Utensils } from 'lucide-react';
+import { DiscoveryDetailOverlay, type DiscoveryKind } from './DiscoveryDetailOverlay';
 import { provinceDetailsCatalog } from '../../data/provinceDetailsData';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
@@ -20,10 +20,12 @@ function formatStatValue(value: string) {
 
 export function ProvinceDetails({ province }: { province: string }) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [selectedItem, setSelectedItem] = useState<{ kind: DiscoveryKind; index: number } | null>(null);
   const current = provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
 
   useEffect(() => {
     setActiveTab('overview');
+    setSelectedItem(null);
   }, [province]);
 
   if (!current) {
@@ -39,6 +41,7 @@ export function ProvinceDetails({ province }: { province: string }) {
   }
 
   const { title, banner, data, administrativeSource } = current;
+  const detail = selectedItem ? data[selectedItem.kind][selectedItem.index] : null;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -143,56 +146,55 @@ export function ProvinceDetails({ province }: { province: string }) {
             )}
 
             {activeTab === 'places' && (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {data.places.map((place) => (
-                  <article key={place.name} className="group overflow-hidden rounded-2xl border border-gray-100 bg-white transition-shadow hover:shadow-md">
-                    <div className="h-40 overflow-hidden">
-                      <ImageWithFallback
-                        src={place.image}
-                        alt={place.name}
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    </div>
-                    <div className="p-4">
-                      <h3 className="mb-1 font-semibold text-gray-900">{place.name}</h3>
-                      <p className="line-clamp-2 text-sm text-gray-500">{place.description}</p>
-                      <a
-                        href={createGoogleMapsSearchUrl(`${place.name}, ${title}`)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 focus-visible:outline-none focus-visible:underline"
-                        aria-label={`Xem ${place.name} trên Google Maps (mở tab mới)`}
-                      >
-                        Xem trên Google Maps <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                      </a>
-                    </div>
-                  </article>
-                ))}
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">{data.places.length} địa điểm · Chọn ảnh hoặc tên để xem chi tiết</p>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {data.places.map((place, index) => (
+                    <button key={index} type="button" onClick={() => setSelectedItem({ kind: 'places', index })}
+                      aria-label={`Xem chi tiết ${place.name}`}
+                      className="group overflow-hidden rounded-2xl border border-gray-100 bg-white text-left transition hover:border-emerald-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
+                      <div className="h-40 overflow-hidden">
+                        <ImageWithFallback src={place.image} alt={place.name} loading="lazy"
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"/>
+                      </div>
+                      <div className="p-4">
+                        <h3 className="mb-1 font-semibold text-gray-900">{place.name}</h3>
+                        <p className="line-clamp-2 text-sm text-gray-500">{place.description}</p>
+                        <span className="mt-3 inline-block text-xs font-semibold text-emerald-700">Xem chi tiết</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
             {activeTab === 'cuisine' && (
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                {data.cuisine.map((food) => (
-                  <article key={food.name} className="flex gap-4 rounded-2xl border border-gray-100 bg-white p-3 transition-colors hover:bg-gray-50">
-                    <ImageWithFallback
-                      src={food.image}
-                      alt={food.name}
-                      loading="lazy"
-                      className="h-20 w-20 shrink-0 rounded-xl object-cover"
-                    />
-                    <div className="flex min-w-0 flex-col justify-center">
-                      <h3 className="mb-1 font-semibold text-gray-900">{food.name}</h3>
-                      <p className="line-clamp-2 text-xs text-gray-500">{food.description}</p>
-                    </div>
-                  </article>
-                ))}
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">{data.cuisine.length} món ăn · Chọn món để xem chi tiết</p>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {data.cuisine.map((food, index) => (
+                    <button key={index} type="button" onClick={() => setSelectedItem({ kind: 'cuisine', index })}
+                      aria-label={`Xem chi tiết ${food.name}`}
+                      className="flex gap-4 rounded-2xl border border-gray-100 bg-white p-3 text-left transition hover:border-emerald-200 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
+                      <ImageWithFallback src={food.image} alt={food.name} loading="lazy"
+                        className="h-20 w-20 shrink-0 rounded-xl object-cover"/>
+                      <div className="flex min-w-0 flex-col justify-center">
+                        <h3 className="mb-1 font-semibold text-gray-900">{food.name}</h3>
+                        <p className="line-clamp-2 text-xs text-gray-500">{food.description}</p>
+                        <span className="mt-2 text-xs font-semibold text-emerald-700">Xem chi tiết</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
+      {selectedItem && detail && (
+        <DiscoveryDetailOverlay kind={selectedItem.kind} item={detail} provinceTitle={title}
+          onClose={() => setSelectedItem(null)} />
+      )}
     </div>
   );
 }

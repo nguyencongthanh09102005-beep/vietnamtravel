@@ -2,6 +2,7 @@ import { dbQuery, json } from './_lib/auth.js';
 import { provinceDetailsCatalog, type ProvinceDetailsCatalogItem } from '../src/data/provinceDetailsData.js';
 import { provincesData, type ProvinceId } from '../src/data/provincesData.js';
 import { archiveLegacyCatalog, type CatalogSection } from '../src/utils/contentArchive.js';
+import { AUTO_CONTENT_GATE_VERSION, isSubjectExcluded, normalizedSubjectKey } from '../src/utils/contentQuality.js';
 
 const legacyRows = archiveLegacyCatalog().records;
 const legacyById = new Map(legacyRows.map(row => [row.id, row]));
@@ -49,6 +50,8 @@ export function mergeVerifiedContent(
   const base = provinceDetailsCatalog[provinceId];
   // A fresh copy avoids mutating the data authored by the original developer.
   const result: ProvinceDetailsCatalogItem = structuredClone(base);
+  const places = new Set(result.data.places.map(x=>normalizedSubjectKey(x.name,provinceId)));
+  const cuisine = new Set(result.data.cuisine.map(x=>normalizedSubjectKey(x.name,provinceId)));
   for (const row of entries) {
     const section = row.section as CatalogSection;
     if (!['overview', 'history', 'places', 'cuisine'].includes(section)) continue;
@@ -56,6 +59,18 @@ export function mergeVerifiedContent(
     const old = legacyById.get(contentId);
     if (old && (old.provinceId !== provinceId || old.section !== section)) continue;
     const value = safeJson(row.payload_json);
+    const versionId = String(row.version_id ?? '');
+    if (versionId.startsWith('auto_')) {
+      // FAIL CLOSED: all automated versions made by the old keyword-only
+      // classifier are immediately invisible even if still in local SQLite.
+      if (!versionId.startsWith('auto_v2_')) continue;
+      const autoPayload = value && typeof value === 'object'
+        ? value as Record<string,unknown> : {};
+      if (autoPayload.taxonomyGateVersion !== AUTO_CONTENT_GATE_VERSION ||
+          typeof autoPayload.name !== 'string' ||
+          isSubjectExcluded(autoPayload.name,section === 'cuisine' ? 'cuisine' : 'places',
+            String(autoPayload.description ?? ''))) continue;
+    }
     if (section === 'overview' && safeOverview(value)) {
       result.title = value.title;
       result.banner = value.banner;
@@ -65,11 +80,23 @@ export function mergeVerifiedContent(
       if (old) result.data.history[old.position] = value;
       else if (!result.data.history.some(x => x.year === value.year && x.event === value.event)) result.data.history.push(value);
     } else if (section === 'places' && validItem(value)) {
-      if (old) result.data.places[old.position] = value;
-      else if (!result.data.places.some(x => x.name.trim().toLowerCase() === value.name.trim().toLowerCase())) result.data.places.push(value);
+      const key=normalizedSubjectKey(value.name,provinceId);
+      if (old) {
+        result.data.places[old.position] = value;
+        places.add(key);
+      } else if (!places.has(key)) {
+        result.data.places.push(value);
+        places.add(key);
+      }
     } else if (section === 'cuisine' && validItem(value)) {
-      if (old) result.data.cuisine[old.position] = value;
-      else if (!result.data.cuisine.some(x => x.name.trim().toLowerCase() === value.name.trim().toLowerCase())) result.data.cuisine.push(value);
+      const key=normalizedSubjectKey(value.name,provinceId);
+      if (old) {
+        result.data.cuisine[old.position] = value;
+        cuisine.add(key);
+      } else if (!cuisine.has(key)) {
+        result.data.cuisine.push(value);
+        cuisine.add(key);
+      }
     }
   }
   return result;
@@ -84,15 +111,19 @@ export default {
     }
     try {
       const rows = await dbQuery(
-        `SELECT i.content_id,i.section,v.payload_json FROM travel_content_items i
+        `SELECT i.content_id,i.section,v.version_id,v.payload_json FROM travel_content_items i
         JOIN travel_content_versions v ON v.version_id=i.current_version_id
         WHERE i.province_id=? AND v.reviewed_status='approved' AND v.province_id=i.province_id
           AND v.section=i.section AND v.content_id=i.content_id
         ORDER BY i.content_id LIMIT 200`,
         [provinceId],
       );
-      const data = mergeVerifiedContent(provinceId as ProvinceId, rows.rows);
-      const response = json({ provinceId, data, source: rows.rows.length ? 'approved_database' : 'legacy_fallback' });
+      const trustedRows = rows.rows.filter(row => !String(row.version_id).startsWith('auto_') ||
+        (String(row.version_id).startsWith('auto_v2_') &&
+          (() => { try { return (JSON.parse(String(row.payload_json)) as {taxonomyGateVersion?:number}).taxonomyGateVersion === AUTO_CONTENT_GATE_VERSION; }
+            catch { return false; } })()));
+      const data = mergeVerifiedContent(provinceId as ProvinceId, trustedRows);
+      const response = json({ provinceId, data, source: trustedRows.length ? 'approved_database' : 'legacy_fallback' });
       response.headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       return response;
     } catch (error) {

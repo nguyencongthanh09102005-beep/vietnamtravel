@@ -40,11 +40,15 @@ export const HISTORICAL_PROVINCE_ALIASES: Readonly<Record<string, ProvinceId>> =
 } as const;
 
 /** Also accept the old unaccented URL IDs without breaking saved links. */
+function aliasKey(value: string) {
+  return normalizeSearchText(value).replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
 export function resolveHistoricalProvince(value: string): ProvinceId | null {
   if (Object.prototype.hasOwnProperty.call(provincesData, value)) return value as ProvinceId;
-  const clean = normalizeSearchText(value.replace(/[._-]/g, ' '));
+  const clean = aliasKey(value);
   for (const [alias, provinceId] of Object.entries(HISTORICAL_PROVINCE_ALIASES)) {
-    if (normalizeSearchText(alias) === clean) return provinceId;
+    if (aliasKey(alias) === clean) return provinceId;
   }
   return null;
 }

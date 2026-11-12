@@ -9,13 +9,16 @@
     "typecheck:api": "tsc --noEmit -p tsconfig.api.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test:api": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node --test scripts/api-smoke.test.mjs scripts/remote-db.test.mjs scripts/itinerary.test.mjs scripts/itinerary-map.test.mjs scripts/content-archive.test.mjs scripts/discover-content.test.mjs scripts/administration.test.mjs scripts/auto-enrich.test.mjs scripts/content-quality.test.mjs scripts/trusted-sources.test.mjs",
+    "test:api": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node --test scripts/api-smoke.test.mjs scripts/remote-db.test.mjs scripts/itinerary.test.mjs scripts/itinerary-map.test.mjs scripts/content-archive.test.mjs scripts/discover-content.test.mjs scripts/administration.test.mjs scripts/auto-enrich.test.mjs scripts/content-quality.test.mjs scripts/trusted-sources.test.mjs scripts/core-pipeline.test.mjs",
     "catalog:backup": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/export-legacy-catalog.mjs",
     "catalog:import": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/import-legacy-content.mjs",
     "catalog:enrich": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/auto-enrich.mjs",
     "catalog:quarantine": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/quarantine-legacy-content.mjs",
     "catalog:photos": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/backfill-photos.mjs",
-    "catalog:sources": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/scan-trusted-sources.mjs"
+    "catalog:sources": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/scan-trusted-sources.mjs",
+    "catalog:core-stage": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/stage-core-candidates.mjs",
+    "catalog:image-queue": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/queue-review-images.mjs",
+    "catalog:image-review": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/review-image-candidates.mjs"
   },
   "dependencies": {
     "framer-motion": "^12.39.0",

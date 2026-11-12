@@ -29,9 +29,13 @@ export function ProvinceDetails({ province }: { province: string }) {
     setSelectedItem(null);
     setRemote(null);
     const controller = new AbortController();
-    if (province in provinceDetailsCatalog) {
+    let inFlight = false;
+    const refresh = () => {
+      if (!(province in provinceDetailsCatalog) || inFlight || controller.signal.aborted) return;
+      inFlight = true;
       void fetch('/api/content?provinceId=' + encodeURIComponent(province), {
         signal: controller.signal,
+        cache: 'no-store',
       }).then(async response => {
         if (!response.ok) return;
         const payload = await response.json() as { provinceId?: string; data?: ProvinceDetailsCatalogItem };
@@ -39,10 +43,20 @@ export function ProvinceDetails({ province }: { province: string }) {
           setRemote({ provinceId: province, data: payload.data });
         }
       }).catch(() => {
-        // The original manually authored catalog remains immediately available.
-      });
-    }
-    return () => controller.abort();
+        // Original content remains visible when dynamic content is unavailable.
+      }).finally(() => { inFlight = false; });
+    };
+    refresh();
+    // Background localhost enrichment can finish while a province tab is open.
+    // Poll only while visible; no user waits on this network request.
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 45_000);
+    const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [province]);
 
   if (!current) {

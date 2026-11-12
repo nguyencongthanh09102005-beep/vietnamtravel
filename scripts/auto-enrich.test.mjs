@@ -81,3 +81,50 @@ test('verified content appears immediately in public API, but not duplicated on 
   const rows=await dbQuery("SELECT COUNT(*) AS count FROM travel_content_items WHERE province_id='Thanh Hoa'");
   assert.equal(rows.rows[0].count,1);
 });
+
+test('original handwritten destination is enriched without deleting source or history',async ()=>{
+  const { archiveLegacyCatalog } = await import('../.api-test-dist/src/utils/contentArchive.js');
+  const { provinceDetailsCatalog } = await import('../.api-test-dist/src/data/provinceDetailsData.js');
+  const original = archiveLegacyCatalog().records.find(row =>
+    row.provinceId==='Thanh Hoa' && row.section==='places'
+    && row.payload.name==='Biển Sầm Sơn');
+  assert.ok(original);
+  const oldVersion = 'legacy_original_samson_test';
+  const now = new Date().toISOString();
+  await dbQuery(`INSERT OR IGNORE INTO travel_content_versions
+    (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,created_at)
+    VALUES (?,?,?,?,?,'legacy_manual',?,'approved',?)`,
+    [oldVersion,original.id,'Thanh Hoa','places',JSON.stringify(original.payload),original.sourceFile,now]);
+  await dbQuery(`INSERT OR IGNORE INTO travel_content_items
+    (content_id,province_id,section,current_version_id,updated_at) VALUES (?,?,?,?,?)`,
+    [original.id,'Thanh Hoa','places',oldVersion,now]);
+  const beachIntro='Biển Sầm Sơn là một bãi biển du lịch tại tỉnh Thanh Hóa, Việt Nam. '
+    +'Địa điểm nằm bên bờ biển, có bãi cát dài và là điểm tham quan quen thuộc. '.repeat(4);
+  const photo='https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Sam_Son.jpg/640px-Sam_Son.jpg';
+  const fetcher = async url => {
+    const u = new URL(url);
+    if (u.searchParams.get('generator') === 'search') return Response.json({query:{pages:[{
+      title:'Biển Sầm Sơn',extract:beachIntro,thumbnail:{source:photo},
+    }]}});
+    if (u.hostname === 'vi.wikipedia.org') return Response.json({query:{pages:[{
+      title:'Biển Sầm Sơn',pageimage:'Sam_Son.jpg',pageprops:{wikibase_item:'Q12345'},
+      coordinates:[{lat:19.75,lon:105.9}],
+    }]}});
+    return Response.json({query:{pages:[{imageinfo:[{
+      descriptionurl:'https://commons.wikimedia.org/wiki/File:Sam_Son.jpg',
+      extmetadata:{LicenseShortName:{value:'CC BY 4.0'},Artist:{value:'Licensed photographer'}},
+    }]}]}});
+  };
+  const result=await enrichSection('Thanh Hoa','places',{fetcher,force:true});
+  assert.equal(result.approved,1);
+  const response=await contentApi.fetch(new Request('https://example.test/api/content?provinceId=Thanh%20Hoa'));
+  assert.equal(response.status,200);
+  const data=await response.json();
+  assert.ok(data.data.data.places.find(x=>x.name==='Biển Sầm Sơn').detail.includes('bãi biển du lịch'));
+  assert.equal(provinceDetailsCatalog['Thanh Hoa'].data.places.find(x=>x.name==='Biển Sầm Sơn').detail,
+    undefined,'Original TypeScript record stays untouched');
+  const active=await dbQuery('SELECT current_version_id FROM travel_content_items WHERE content_id=?',[original.id]);
+  assert.notEqual(active.rows[0].current_version_id,oldVersion);
+  const history=await dbQuery('SELECT reviewed_status FROM travel_content_versions WHERE version_id=?',[oldVersion]);
+  assert.equal(history.rows[0].reviewed_status,'approved','Old version retained for rollback');
+});

@@ -65,12 +65,18 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
             <MapPin className="h-3.5 w-3.5" aria-hidden="true"/>{provinceTitle}
           </div>
           <h3 className="mb-3 text-lg font-bold text-gray-950">{isPlace ? 'Giới thiệu địa điểm' : 'Giới thiệu món ăn'}</h3>
-          <p className="whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-base">{item.description}</p>
-          {'detail' in item && typeof item.detail === 'string' && item.detail.trim() ? (
-            <p className="mt-4 whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-base">{item.detail}</p>
-          ) : (
+          <p className="whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-base">
+            {'detail' in item && typeof item.detail === 'string' && item.detail.trim()
+              ? item.detail : item.description}
+          </p>
+          {!('detail' in item && typeof item.detail === 'string' && item.detail.trim()) && (
             <p className="mt-5 rounded-xl bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-500">
               Thông tin chuyên sâu đang được bổ sung và đối chiếu nguồn. Nội dung hiện tại được giữ nguyên từ dữ liệu đã có.
+            </p>
+          )}
+          {'imageAttribution' in item && typeof item.imageAttribution === 'string' && item.imageAttribution.trim() && (
+            <p className="mt-5 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">
+              Ghi công ảnh: {item.imageAttribution}
             </p>
           )}
           {'sourceUrl' in item && typeof item.sourceUrl === 'string' && /^https:\/\//.test(item.sourceUrl) ? (

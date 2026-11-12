@@ -117,8 +117,61 @@ function localApi(): Plugin {
   };
 }
 
+/**
+ * Non-blocking enrichment for localhost, independent of Vercel Cron and Gemini.
+ * The source scanner runs only while the Vite dev server is open. It refuses to
+ * touch a remote Turso database without a separately reviewed deployment.
+ * Tests explicitly disable this plugin to remain deterministic.
+ */
+function localContentEnrichment(): Plugin {
+  return {
+    name: 'vietnamtravel-local-enrichment',
+    apply: 'serve',
+    configureServer(server) {
+      if (process.env.LOCAL_CONTENT_AUTORUN === '0') return;
+      let closed = false;
+      let startup: ReturnType<typeof setTimeout> | undefined;
+      let daily: ReturnType<typeof setInterval> | undefined;
+      const run = async () => {
+        if (closed) return;
+        if (process.env.TURSO_DATABASE_URL?.trim()) {
+          console.info('[VietnamTravel] Local auto-enrichment skipped: remote Turso is configured. Use the authorized server-side cron instead.');
+          return;
+        }
+        try {
+          const { enrichAll } = await server.ssrLoadModule('/api/_lib/auto-enrich.ts');
+          const summaries = await enrichAll({
+            shouldStop: () => closed,
+            onProgress: (item: { provinceId: string; section: string; approved: number; pending: number; errors: number }) => {
+              if (item.approved || item.pending || item.errors) {
+                console.info('[VietnamTravel content]', item.provinceId, item.section,
+                  'added:', item.approved, 'needs review:', item.pending, 'errors:', item.errors);
+              }
+            },
+          });
+          const published = summaries.reduce((sum: number, x: { approved: number }) => sum + x.approved, 0);
+          console.info('[VietnamTravel content] Scan finished. New verified entries:', published,
+            '· Reload the province tab to view new cards.');
+        } catch (error) {
+          console.warn('[VietnamTravel content] Local source scan unavailable:', error);
+        }
+      };
+      server.httpServer?.once('listening', () => {
+        startup = setTimeout(() => { void run(); }, 5000);
+        daily = setInterval(() => { void run(); }, 24 * 3600 * 1000);
+        daily.unref?.();
+      });
+      server.httpServer?.once('close', () => {
+        closed = true;
+        if (startup) clearTimeout(startup);
+        if (daily) clearInterval(daily);
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), localApi()],
+  plugins: [react(), tailwindcss(), localApi(), localContentEnrichment()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

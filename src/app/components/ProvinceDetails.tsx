@@ -2,7 +2,7 @@ import { useEffect, useState, type ComponentType } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Camera, Clock, Info, MapPin, Utensils } from 'lucide-react';
 import { DiscoveryDetailOverlay, type DiscoveryKind } from './DiscoveryDetailOverlay';
-import { provinceDetailsCatalog } from '../../data/provinceDetailsData';
+import { provinceDetailsCatalog, type ProvinceDetailsCatalogItem } from '../../data/provinceDetailsData';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
 type TabType = 'overview' | 'history' | 'places' | 'cuisine';
@@ -21,11 +21,28 @@ function formatStatValue(value: string) {
 export function ProvinceDetails({ province }: { province: string }) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedItem, setSelectedItem] = useState<{ kind: DiscoveryKind; index: number } | null>(null);
-  const current = provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
+  const [remote, setRemote] = useState<{ provinceId: string; data: ProvinceDetailsCatalogItem } | null>(null);
+  const current = remote?.provinceId === province ? remote.data : provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
 
   useEffect(() => {
     setActiveTab('overview');
     setSelectedItem(null);
+    setRemote(null);
+    const controller = new AbortController();
+    if (province in provinceDetailsCatalog) {
+      void fetch('/api/content?provinceId=' + encodeURIComponent(province), {
+        signal: controller.signal,
+      }).then(async response => {
+        if (!response.ok) return;
+        const payload = await response.json() as { provinceId?: string; data?: ProvinceDetailsCatalogItem };
+        if (!controller.signal.aborted && payload.provinceId === province && payload.data?.data) {
+          setRemote({ provinceId: province, data: payload.data });
+        }
+      }).catch(() => {
+        // The original manually authored catalog remains immediately available.
+      });
+    }
+    return () => controller.abort();
   }, [province]);
 
   if (!current) {

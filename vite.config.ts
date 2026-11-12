@@ -12,6 +12,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
 function localApi(): Plugin {
   const endpoints: Record<string, string> = {
     '/api/ai': '/api/ai.ts',
+    '/api/content': '/api/content.ts',
     '/api/itineraries': '/api/itineraries.ts',
     '/api/itineraries/generate': '/api/itineraries/generate.ts',
     '/api/itineraries/locations': '/api/itineraries/locations.ts',

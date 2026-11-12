@@ -8,7 +8,8 @@ import { TravelCollections } from './components/TravelCollections';
 import { AiItineraryPlanner } from './components/AiItineraryPlanner';
 import { UserMenu } from './components/UserMenu';
 import { VietnamMap } from './components/VietnamMap';
-import { provincesData } from '../data/provincesData';
+import { provincesData, type ProvinceId } from '../data/provincesData';
+import { resolveHistoricalProvince, searchHistoricalProvinces } from '../data/historicalProvinceAliases';
 import type { AuthStateResponse, AuthUser } from '../types/auth';
 import { normalizeSearchText } from '../utils/text';
 import type { SavedItinerary } from '../utils/itinerary';
@@ -22,12 +23,13 @@ function hasPasswordRecoveryLink(): boolean {
 function getProvinceFromUrl(): string {
   if (typeof window === 'undefined') return '';
   const id = new URLSearchParams(window.location.search).get('province') ?? '';
-  return Object.prototype.hasOwnProperty.call(provincesData, id) ? id : '';
+  return resolveHistoricalProvince(id) ?? '';
 }
 
 export default function App() {
   const [selectedProvince, setSelectedProvince] = useState(getProvinceFromUrl);
   const [keyword, setKeyword] = useState('');
+  const [extraAliases, setExtraAliases] = useState<Array<{ alias: string; provinceId: ProvinceId }>>([]);
   const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const [started, setStarted] = useState(() => Boolean(getProvinceFromUrl()) || hasPasswordRecoveryLink());
   const [forceRecovery, setForceRecovery] = useState(hasPasswordRecoveryLink);
@@ -82,14 +84,27 @@ export default function App() {
     [],
   );
 
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/administration/aliases', { signal: controller.signal }).then(async response => {
+      if (!response.ok) return;
+      const payload = await response.json() as { aliases?: Array<{ alias: string; provinceId: ProvinceId }> };
+      if (!controller.signal.aborted && Array.isArray(payload.aliases)) setExtraAliases(payload.aliases);
+    }).catch(() => { /* Static 2025 aliases still resolve when API is unavailable. */ });
+    return () => controller.abort();
+  }, []);
+
   const filtered = useMemo(() => {
     const normalizedKeyword = normalizeSearchText(keyword);
     if (!normalizedKeyword) return [];
 
     return provinces.filter((province) =>
-      normalizeSearchText(provincesData[province].name).includes(normalizedKeyword),
+      normalizeSearchText(provincesData[province].name).includes(normalizedKeyword)
+      || searchHistoricalProvinces(province, normalizedKeyword)
+      || extraAliases.some(a => a.provinceId === province &&
+        normalizeSearchText(a.alias).includes(normalizedKeyword)),
     );
-  }, [keyword, provinces]);
+  }, [keyword, provinces, extraAliases]);
 
   const selectProvince = (province: string) => {
     if (!Object.prototype.hasOwnProperty.call(provincesData, province)) return;

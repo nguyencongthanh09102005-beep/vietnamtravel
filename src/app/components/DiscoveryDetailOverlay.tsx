@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ExternalLink, MapPin, X } from 'lucide-react';
 import { createGoogleMapsSearchUrl } from '../../utils/googleMaps';
 import { ImageWithFallback } from './figma/ImageWithFallback';
@@ -42,7 +43,7 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
   const isPlace = kind === 'places';
   const label = isPlace ? 'Địa điểm du lịch' : 'Ẩm thực địa phương';
   const mapsQuery = isPlace ? item.name + ', ' + provinceTitle : item.name + ' ở ' + provinceTitle;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/60 p-2 backdrop-blur-[3px] sm:p-5"
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
       <section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="discovery-detail-title"
@@ -85,6 +86,7 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
           </a>
         </footer>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

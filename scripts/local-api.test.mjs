@@ -58,6 +58,47 @@ test('additive travel content tables exist without modifying account data', asyn
   assert.equal(empty.rows[0].total, 0, 'Existing hard-coded content is not erased or auto-overwritten');
 });
 
+test('public discovery API merges approved content, ignores drafts, and retains original records', async () => {
+  const legacy = await fetch(base + '/api/content?provinceId=Thanh%20Hoa');
+  assert.equal(legacy.status, 200);
+  const original = await legacy.json();
+  assert.equal(original.source, 'legacy_fallback');
+  assert.equal(original.data.data.cuisine.length, 3);
+  assert.equal(original.data.data.places.length, 3);
+  const invalid = await fetch(base + '/api/content?provinceId=NotAProvince');
+  assert.equal(invalid.status, 400);
+
+  const { dbQuery } = await server.ssrLoadModule('/api/_lib/database.ts');
+  const now = new Date().toISOString();
+  const approved = { name: 'Điểm tham quan kiểm thử', description: 'Thông tin đã qua kiểm chứng.',
+    image: 'https://example.org/photo.jpg', detail: 'Thông tin bổ sung.' };
+  await dbQuery(`INSERT INTO travel_content_versions
+    (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,created_at)
+    VALUES (?,?,?,?,?,'verified_external',?,'approved',?)`,
+    ['test-v1','test-spot','Thanh Hoa','places',JSON.stringify(approved),'https://example.org/source',now]);
+  await dbQuery(`INSERT INTO travel_content_items
+    (content_id,province_id,section,current_version_id,updated_at) VALUES (?,?,?,?,?)`,
+    ['test-spot','Thanh Hoa','places','test-v1',now]);
+  await dbQuery(`INSERT INTO travel_content_versions
+    (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,created_at)
+    VALUES (?,?,?,?,?,'ai_draft',?,'pending',?)`,
+    ['test-v2','test-unreviewed','Thanh Hoa','places',
+      JSON.stringify({ name:'Bịa đặt', description:'Không được hiển thị', image:'https://example.org/no.jpg' }),
+      'https://example.org/source',now]);
+  await dbQuery(`INSERT INTO travel_content_items
+    (content_id,province_id,section,current_version_id,updated_at) VALUES (?,?,?,?,?)`,
+    ['test-unreviewed','Thanh Hoa','places','test-v2',now]);
+  const response = await fetch(base + '/api/content?provinceId=Thanh%20Hoa');
+  assert.equal(response.status, 200);
+  const dynamic = await response.json();
+  assert.equal(dynamic.source, 'approved_database');
+  assert.equal(dynamic.data.data.places.length, 4);
+  assert.equal(dynamic.data.data.places.at(-1).detail, approved.detail);
+  assert.ok(!dynamic.data.data.places.some(x => x.name === 'Bịa đặt'));
+  const another = await fetch(base + '/api/content?provinceId=Ha%20Noi');
+  assert.equal((await another.json()).data.data.places.length, 2, 'Do not leak content across provinces');
+});
+
 test('dev AI API is routed to the real TypeScript handler', async () => {
   const response = await fetch(base + '/api/ai');
   assert.equal(response.status, 405);

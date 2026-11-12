@@ -98,6 +98,13 @@ const schema = [
     alias_name TEXT PRIMARY KEY, province_id TEXT NOT NULL,
     source_url TEXT NOT NULL, approved_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS travel_content_enrichment (
+    scan_key TEXT PRIMARY KEY,
+    checked_at TEXT NOT NULL,
+    found INTEGER NOT NULL DEFAULT 0,
+    approved INTEGER NOT NULL DEFAULT 0,
+    pending INTEGER NOT NULL DEFAULT 0
+  )`,
 
 
 ];

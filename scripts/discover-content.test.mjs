@@ -25,14 +25,14 @@ test('Wikipedia is queried only via fixed HTTPS endpoint with identifying user a
   const fetcher = async (url, options) => {
     const parsed = new URL(url);
     assert.equal(parsed.hostname, 'vi.wikipedia.org');
-    assert.equal(parsed.searchParams.get('gsrlimit'), '6');
+    assert.equal(parsed.searchParams.get('gsrlimit'), '12');
     assert.match(options.headers['User-Agent'], /VietnamTravel/);
     called++;
     return Response.json({ query: { pages: [] } });
   };
   const result = await discoverWikipedia('Thanh Hoa','cuisine',fetcher);
   assert.deepEqual(result, []);
-  assert.equal(called, 1);
+  assert.equal(called, 2);
 });
 
 test('malformed upstream content never becomes a candidate', () => {

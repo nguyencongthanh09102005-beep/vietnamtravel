@@ -80,6 +80,25 @@ const schema = [
     failures INTEGER NOT NULL DEFAULT 0,
     started_at TEXT NOT NULL, finished_at TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS travel_admin_checks (
+    day_key TEXT PRIMARY KEY,
+    observed_count INTEGER NOT NULL,
+    observed_hash TEXT NOT NULL,
+    state TEXT NOT NULL,
+    checked_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS travel_admin_candidates (
+    id TEXT PRIMARY KEY,
+    category TEXT NOT NULL CHECK(category IN ('count_mismatch','source_changed','official_news')),
+    title TEXT NOT NULL, source_url TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','reviewed','dismissed')),
+    discovered_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS travel_province_aliases (
+    alias_name TEXT PRIMARY KEY, province_id TEXT NOT NULL,
+    source_url TEXT NOT NULL, approved_at TEXT NOT NULL
+  )`,
+
 
 ];
 

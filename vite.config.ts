@@ -13,6 +13,8 @@ function localApi(): Plugin {
   const endpoints: Record<string, string> = {
     '/api/ai': '/api/ai.ts',
     '/api/content': '/api/content.ts',
+    '/api/content/refresh': '/api/content/refresh.ts',
+    '/api/content/review': '/api/content/review.ts',
     '/api/itineraries': '/api/itineraries.ts',
     '/api/itineraries/generate': '/api/itineraries/generate.ts',
     '/api/itineraries/locations': '/api/itineraries/locations.ts',
@@ -35,7 +37,8 @@ function localApi(): Plugin {
       const env = loadEnv(server.config.mode, server.config.root, '');
       for (const key of ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN', 'LOCAL_DB_PATH',
         'RESEND_API_KEY', 'AUTH_EMAIL_FROM', 'AUTH_PUBLIC_URL',
-        'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_FALLBACK_MODEL', 'GOOGLE_MAPS_API_KEY']) {
+        'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_FALLBACK_MODEL', 'GOOGLE_MAPS_API_KEY',
+        'CRON_SECRET', 'CONTENT_REVIEW_SECRET']) {
         if (process.env[key] === undefined && env[key] !== undefined) {
           process.env[key] = env[key];
         }

@@ -99,6 +99,59 @@ test('public discovery API merges approved content, ignores drafts, and retains 
   assert.equal((await another.json()).data.data.places.length, 2, 'Do not leak content across provinces');
 });
 
+test('daily content refresh requires cron secret and never publishes unchecked suggestions', async () => {
+  const previousSecret = process.env.CRON_SECRET;
+  const originalFetch = globalThis.fetch;
+  const { default: cron } = await server.ssrLoadModule('/api/content/refresh.ts');
+  const baseUrl = 'https://example.test/api/content/refresh';
+  const request = token => new Request(baseUrl, {
+    headers: token ? { authorization: 'Bearer ' + token } : {},
+  });
+  try {
+    delete process.env.CRON_SECRET;
+    assert.equal((await cron.fetch(request())).status,503);
+    process.env.CRON_SECRET = 'test-secret-0123456789-0123456789-abcdef';
+    assert.equal((await cron.fetch(request())).status,401);
+    globalThis.fetch = async (url, options) => {
+      if (String(url).startsWith('https://vi.wikipedia.org/')) {
+        assert.match(options.headers['User-Agent'], /VietnamTravel/);
+        return Response.json({ query: { pages: [] } });
+      }
+      return originalFetch(url, options);
+    };
+    const response = await cron.fetch(request(process.env.CRON_SECRET));
+    assert.equal(response.status,200);
+    const result = await response.json();
+    assert.equal(result.ok, true);
+    assert.equal(result.provinces.length,3);
+    assert.equal(result.queries,6);
+    assert.equal(result.published,0);
+    const duplicate = await cron.fetch(request(process.env.CRON_SECRET));
+    assert.equal((await duplicate.json()).state,'already_checked');
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousSecret === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = previousSecret;
+  }
+});
+
+test('draft review is denied without separate administrator authorization', async () => {
+  const previous = process.env.CONTENT_REVIEW_SECRET;
+  const { default: review } = await server.ssrLoadModule('/api/content/review.ts');
+  try {
+    delete process.env.CONTENT_REVIEW_SECRET;
+    assert.equal((await review.fetch(new Request('https://example.test/api/content/review'))).status,503);
+    process.env.CONTENT_REVIEW_SECRET = 'review-only-secret-0123456789-abcdef';
+    assert.equal((await review.fetch(new Request('https://example.test/api/content/review'))).status,401);
+    assert.equal((await review.fetch(new Request('https://example.test/api/content/review', {
+      headers: { authorization: 'Bearer ' + process.env.CONTENT_REVIEW_SECRET },
+    }))).status,200);
+  } finally {
+    if (previous === undefined) delete process.env.CONTENT_REVIEW_SECRET;
+    else process.env.CONTENT_REVIEW_SECRET = previous;
+  }
+});
+
 test('dev AI API is routed to the real TypeScript handler', async () => {
   const response = await fetch(base + '/api/ai');
   assert.equal(response.status, 405);

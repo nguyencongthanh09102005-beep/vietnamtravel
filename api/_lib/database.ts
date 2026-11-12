@@ -74,6 +74,12 @@ const schema = [
     FOREIGN KEY(current_version_id) REFERENCES travel_content_versions(version_id)
   )`,
   'CREATE INDEX IF NOT EXISTS travel_content_province_idx ON travel_content_items(province_id,section)',
+  `CREATE TABLE IF NOT EXISTS travel_content_refresh_runs (
+    day_key TEXT PRIMARY KEY, state TEXT NOT NULL,
+    checked INTEGER NOT NULL DEFAULT 0, staged INTEGER NOT NULL DEFAULT 0,
+    failures INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT NOT NULL, finished_at TEXT
+  )`,
 
 ];
 

@@ -50,6 +50,7 @@ const fetcherFor = (license='CC BY-SA 4.0', artist='Photo contributor') => async
   });
   return Response.json({query:{pages:[{title:'File:Ho_Du_Lich.jpg',
     imageinfo:[{descriptionurl:'https://commons.wikimedia.org/wiki/File:Ho_Du_Lich.jpg',
+      thumburl:thumbnail,
       extmetadata:{LicenseShortName:{value:license},Artist:{value:artist}}}]}]}});
 };
 test('publishes only image-licensed, article-linked and region-matching content',async ()=>{
@@ -124,6 +125,7 @@ test('original handwritten destination is enriched without deleting source or hi
     });
     return Response.json({query:{pages:[{imageinfo:[{
       descriptionurl:'https://commons.wikimedia.org/wiki/File:Sam_Son.jpg',
+      thumburl:photo,
       extmetadata:{LicenseShortName:{value:'CC BY 4.0'},Artist:{value:'Licensed photographer'}},
     }]}]}});
   };
@@ -141,14 +143,14 @@ test('original handwritten destination is enriched without deleting source or hi
   assert.equal(history.rows[0].reviewed_status,'approved','Old version retained for rollback');
 });
 
-test('missing Commons image does not suppress reliably located destination',async ()=>{
+test('Wikipedia missing thumbnail can still recover a licensed image from article pageimage',async ()=>{
   const noPhoto={...candidate,payload:{...candidate.payload,image:''}};
   const verdict=await assessCandidate(noPhoto,fetcherFor());
   assert.equal(verdict.approved,true);
-  assert.equal(verdict.payload.image,'');
-  assert.equal(verdict.payload.imageStatus,'pending');
+  assert.equal(verdict.payload.image,thumbnail);
+  assert.equal(verdict.payload.imageStatus,'verified');
   assert.equal(verdict.payload.wikidataId,'Q12345678');
-  assert.ok(verdict.payload.imageAttribution.includes('Chưa có ảnh'));
+  assert.match(verdict.payload.imageAttribution,/Photo contributor/);
 });
 
 test('a correct-source Wikidata item without licensed photo is still visible in API',async ()=>{

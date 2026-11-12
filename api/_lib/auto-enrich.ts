@@ -255,7 +255,7 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
           const updated = await dbQuery(
             `UPDATE travel_content_items SET current_version_id=?,updated_at=?
              WHERE content_id=? AND current_version_id=?`,
-            [versionId,now.toISOString(),contentId,String(current.current_version_id)]);
+            [versionId,now.toISOString(),contentId,String(current?.current_version_id ?? '')]);
           published += updated.changes;
         }
       }

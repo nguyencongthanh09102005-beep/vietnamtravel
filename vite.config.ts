@@ -15,6 +15,8 @@ function localApi(): Plugin {
     '/api/content': '/api/content.ts',
     '/api/content/refresh': '/api/content/refresh.ts',
     '/api/content/review': '/api/content/review.ts',
+    '/api/administration/check': '/api/administration/check.ts',
+    '/api/administration/aliases': '/api/administration/aliases.ts',
     '/api/itineraries': '/api/itineraries.ts',
     '/api/itineraries/generate': '/api/itineraries/generate.ts',
     '/api/itineraries/locations': '/api/itineraries/locations.ts',

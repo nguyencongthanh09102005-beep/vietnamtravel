@@ -1,12 +1,13 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { dbQuery, json } from '../_lib/auth.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
-import { discoverWikipedia } from '../_lib/discover-content.js';
+import { enrichSection } from '../_lib/auto-enrich.js';
 
 /**
- * Vercel Cron (at most once/day on Hobby) stages sourced suggestions.
- * This endpoint NEVER publishes uncertain content, replaces old records,
- * calls Gemini for each visitor, or changes the map/taxonomy.
+ * Scheduled source verification, identical to the local SQLite enrichment.
+ * Confident items (Wikipedia article + Wikidata id + matching location and
+ * Commons-licensed illustration) are published ahead of visitor requests.
+ * Everything else stays pending. Never changes manually authored records.
  */
 function hasCronAuthorization(request: Request) {
   const secret = process.env.CRON_SECRET ?? '';
@@ -36,24 +37,17 @@ export default {
       const dayNumber = Math.floor(now.getTime() / 86400000);
       const start = (dayNumber * 3) % provinces.length;
       const batch = Array.from({ length: 3 }, (_, index) => provinces[(start + index) % provinces.length]);
-      let checked = 0, staged = 0, failures = 0;
+      let checked = 0, staged = 0, failures = 0, published = 0;
       for (const provinceId of batch) {
         for (const section of ['places','cuisine'] as const) {
           try {
-            const discovered = await discoverWikipedia(provinceId, section);
+            const result = await enrichSection(provinceId, section);
             checked++;
-            for (const candidate of discovered) {
-              const result = await dbQuery(
-                `INSERT OR IGNORE INTO travel_content_versions
-                (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,checked_at,created_at)
-                VALUES (?,?,?,?,?,'ai_draft',?,'pending',?,?)`,
-                [candidate.versionId,candidate.contentId,candidate.provinceId,candidate.section,
-                  JSON.stringify(candidate.payload),candidate.sourceRef,now.toISOString(),now.toISOString()],
-              );
-              staged += result.changes;
-            }
+            staged += result.pending;
+            published += result.approved;
+            failures += result.errors;
           } catch (error) {
-            console.warn('[content-refresh] discovery failed', provinceId, section, error);
+            console.warn('[content-refresh] section failed', provinceId, section, error);
             failures++;
           }
         }
@@ -64,7 +58,7 @@ export default {
         [state,checked,staged,failures,new Date().toISOString(),dayKey]);
       return json({ ok: true, state, date: dayKey, provinces: batch,
         queries: checked, staged, failedQueries: failures,
-        published: 0, note: 'Nội dung từ nguồn ngoài đang chờ kiểm chứng, chưa công khai.' });
+        published, note: 'Chỉ nội dung có chứng cứ và ảnh có giấy phép phù hợp được công khai; còn lại lưu chờ kiểm tra.' });
     } catch (error) {
       console.error('[content-refresh] failed', error);
       return json({ error: 'Không thể chạy cập nhật; dữ liệu đang hiển thị không bị ảnh hưởng.' }, 503);

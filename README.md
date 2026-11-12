@@ -15,6 +15,23 @@ Truy cập địa chỉ Vite hiển thị, thường là http://localhost:5173. 
 
 Copy `.env.example` thành `.env` rồi điền **Gemini API key**. Có thể để trống toàn bộ mục Turso/Resend khi chỉ phát triển local. **Đừng commit file .env, .data hay token**.
 
+## Đợt 1 — Chuẩn bị dữ liệu du lịch tự cập nhật
+
+Dữ liệu tỉnh thành, lịch sử, địa điểm và ẩm thực **do bạn tự viết** tại
+`src/data/provinceDetailsData.ts` vẫn được giữ nguyên, tiếp tục hiển thị
+bình thường. Có thể xuất bản sao lưu local và kiểm tra phục hồi đầy đủ:
+
+```bash
+npm run catalog:backup
+```
+
+Lệnh ghi `.data/backups/legacy-province-catalog.v1.json` (được gitignore),
+**không gửi dữ liệu lên Turso**, không thay đổi nội dung website. Đã bổ sung
+schema lưu phiên bản nội dung; API đọc dữ liệu động và việc tự tìm/cập nhật
+sẽ triển khai trong các đợt tiếp theo.
+
+Xem [Lộ trình chuẩn hóa và tự động cập nhật dữ liệu](docs/CONTENT_DATA_MIGRATION.md).
+
 ## AI Itinerary Planner (MVP)
 
 Chọn tỉnh trên bản đồ và nhấn **Lập lịch trình bằng AI** để tạo hành trình theo ngày, ngân sách, số người và phong cách du lịch. Ví dụ: **Đà Nẵng, 3 ngày, 2 người, 3.000.000đ, ưu tiên ẩm thực**.

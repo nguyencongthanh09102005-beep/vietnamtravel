@@ -8,6 +8,8 @@ import { createServer } from 'vite';
 // Always isolate integration test data from the user's real SQLite database.
 const tempFolder = mkdtempSync(join(tmpdir(), 'vietnamtravel-db-test-'));
 process.env.LOCAL_DB_PATH = join(tempFolder, 'data.sqlite');
+// Content harvesting must not contact external services or mutate isolated test DB.
+process.env.LOCAL_CONTENT_AUTORUN = '0';
 process.env.TURSO_DATABASE_URL = '';
 process.env.TURSO_AUTH_TOKEN = '';
 

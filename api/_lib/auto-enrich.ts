@@ -5,6 +5,7 @@ import { HISTORICAL_PROVINCE_ALIASES } from '../../src/data/historicalProvinceAl
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
 import { archiveLegacyCatalog } from '../../src/utils/contentArchive.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
+import { AUTO_CONTENT_GATE_VERSION, evaluateContentTaxonomy, isSubjectExcluded, normalizedSubjectKey } from '../../src/utils/contentQuality.js';
 
 const UA = 'VietnamTravel/1.0 (https://github.com/nguyencongthanh09102005-beep/vietnamtravel; educational source attribution)';
 const SEVEN_DAYS_MS = 7 * 86400000;
@@ -43,7 +44,7 @@ function relevantToSection(title: string, description: string, section: Section)
   return / (dac san|mon an|am thuc|banh|nem|chao|com|bun|pho|cha|che|mam|goi|rau|lau|canh|keo|mi|hu tieu|ca kho|thit|tom|suon|xoi) /.test(value);
 }
 async function getJson(url: URL, fetcher: typeof fetch) {
-  if (!['vi.wikipedia.org','commons.wikimedia.org'].includes(url.hostname)
+  if (!['vi.wikipedia.org','commons.wikimedia.org','www.wikidata.org'].includes(url.hostname)
     || url.protocol !== 'https:' || url.pathname !== '/w/api.php') throw new Error('NON_ALLOWLISTED_CONTENT_API');
   const response = await fetcher(url.toString(),{
     headers: { 'User-Agent': UA, Accept: 'application/json' },
@@ -79,12 +80,15 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
   fetcher: typeof fetch = fetch): Promise<EnrichmentAssessment> {
   const pending = (reason: string): EnrichmentAssessment => ({approved:false,reason,payload:candidate.payload});
   const { provinceId, section, payload } = candidate;
+  if (isSubjectExcluded(payload.name,section,payload.description))
+    return pending('Bài viết về người, sự cố, tỉnh, động vật hoặc chủ đề ngoài danh mục');
   if (!strongProvinceMention(payload.detail, provinceId)) return pending('Không nêu rõ tỉnh trong phần giới thiệu');
   if (!relevantToSection(payload.name, payload.description, section)) return pending('Chưa xác định đúng loại nội dung');
   const filename = commonsFile(payload.image);
   try {
     const pageRequest = wikiUrl('vi.wikipedia.org',{
-      titles: payload.name, prop:'pageprops|coordinates|pageimages', pithumbsize:'640', redirects:'1',
+      titles: payload.name, prop:'pageprops|coordinates|pageimages|categories',
+      cllimit:'max', pithumbsize:'640', redirects:'1',
     });
     const article = asRecord(await getJson(pageRequest,fetcher));
     const pages = asRecord(article.query).pages;
@@ -96,6 +100,24 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
     if (Object.hasOwn(meta,'disambiguation')) return pending('Trang định hướng, không phải địa điểm/món ăn');
     if (normalized(String(page.title ?? '')) !== normalized(payload.name))
       return pending('Tiêu đề nguồn không trùng');
+
+    const categories = Array.isArray(page.categories)
+      ? page.categories.map(item=>String(asRecord(item).title ?? '').replace(/^Thể loại:\\s*/i,''))
+        .filter(Boolean) : [];
+    const wdResult = asRecord(await getJson(wikiUrl('www.wikidata.org',{
+      action:'wbgetentities', ids:itemId, props:'descriptions',
+      languages:'vi|en', languagefallback:'1',
+    }),fetcher));
+    const entry = asRecord(asRecord(wdResult.entities)[itemId]);
+    const descriptions = asRecord(entry.descriptions);
+    const wikidataDescription = String(
+      asRecord(descriptions.vi).value ?? asRecord(descriptions.en).value ?? '');
+    const taxonomy = evaluateContentTaxonomy({
+      name: payload.name, description: payload.detail,
+      categoryTitles: categories, wikidataDescription,
+      section, provinceId,
+    });
+    if (!taxonomy.approved) return pending(taxonomy.reason);
     if (section === 'places') {
       if (!Array.isArray(page.coordinates) || page.coordinates.length === 0)
         return pending('Địa điểm thiếu tọa độ tham chiếu');
@@ -145,6 +167,8 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
         imageLicense: license || undefined,
         imageStatus: photo ? 'verified' : 'pending',
         wikidataId:itemId,
+        taxonomyGateVersion:AUTO_CONTENT_GATE_VERSION,
+        taxonomyEvidence:{ categories: categories.slice(0,20), wikidataDescription },
         ...(section === 'places' ? { coordinates: page.coordinates } : {}),
       },
     };
@@ -163,7 +187,7 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
 } = {}): Promise<EnrichSummary> {
   const now = options.now ?? new Date();
   const base: EnrichSummary = {provinceId,section,found:0,approved:0,pending:0,skipped:false,errors:0};
-  const key = provinceId + ':' + section;
+  const key = 'taxonomy-v2:' + provinceId + ':' + section;
   const last = await dbOne('SELECT checked_at FROM travel_content_enrichment WHERE scan_key=?',[key]);
   if (!options.force && last?.checked_at
     && now.getTime()-Date.parse(String(last.checked_at)) < SEVEN_DAYS_MS) return {...base,skipped:true};
@@ -177,25 +201,35 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
   }
   base.found = candidates.length;
   const oldItems = await dbQuery(
-    `SELECT i.content_id,v.source_kind,v.payload_json FROM travel_content_items i
+    `SELECT i.content_id,v.version_id,v.source_kind,v.payload_json FROM travel_content_items i
     JOIN travel_content_versions v ON i.current_version_id=v.version_id
     WHERE i.province_id=? AND i.section=?`,[provinceId,section]);
-  const names = new Map<string,string>(oldItems.rows.map(row=>{
-    try{return [normalized(String((JSON.parse(String(row.payload_json)) as {name:string}).name)),
-      String(row.source_kind)]}catch{return ['','unknown']}
+  const names = new Map<string,{sourceKind:string;versionId:string}>(oldItems.rows.map(row=>{
+    try {
+      return [normalizedSubjectKey(String((JSON.parse(String(row.payload_json)) as {name:string}).name),provinceId),
+        {sourceKind:String(row.source_kind),versionId:String(row.version_id)}];
+    } catch {return ['',{sourceKind:'unknown',versionId:''}]}
   }));
   for (const candidate of candidates.slice(0,16)) {
-    const name = normalized(candidate.payload.name);
-    if (names.has(name) && names.get(name) !== 'legacy_manual') continue;
+    const name = normalizedSubjectKey(candidate.payload.name,provinceId);
+    const previous = names.get(name);
+    if (previous && previous.sourceKind !== 'legacy_manual' &&
+        !previous.versionId.startsWith('auto_')) continue;
+    if (previous?.versionId.startsWith('auto_v2_')) continue;
     // Match an original record by exact name to enrich it in-place via a new
     // *version*. provinceDetailsData.ts is never touched and remains fallback.
     const old = legacyRows.find(row => row.provinceId === provinceId &&
       row.section === section && 'name' in row.payload &&
-      normalized(row.payload.name) === name);
+      normalizedSubjectKey(row.payload.name,provinceId) === name);
     const contentId = old?.id ?? candidate.contentId;
     const verdict = await assessCandidate(candidate,fetcher);
     const status = verdict.approved ? 'approved' : 'pending';
-    const versionId = 'auto_' + createHash('sha256').update(contentId + JSON.stringify(verdict.payload)).digest('hex').slice(0,48);
+    if (verdict.approved && old && 'name' in old.payload) {
+      // Preserve the author's own display name (Don Quảng Ngãi instead of
+      // the encyclopedic disambiguation title "Don (món ăn)").
+      verdict.payload.name = old.payload.name;
+    }
+    const versionId = 'auto_v2_' + createHash('sha256').update(contentId + JSON.stringify(verdict.payload)).digest('hex').slice(0,48);
     const row = await dbQuery(
       `INSERT OR IGNORE INTO travel_content_versions
        (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,checked_at,created_at)
@@ -216,7 +250,8 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
            JOIN travel_content_versions v ON v.version_id=i.current_version_id
            WHERE i.content_id=? AND i.province_id=? AND i.section=?`,
           [contentId,provinceId,section]);
-        if (current?.source_kind === 'legacy_manual') {
+        if (current?.source_kind === 'legacy_manual' ||
+            String(current?.current_version_id ?? '').startsWith('auto_')) {
           const updated = await dbQuery(
             `UPDATE travel_content_items SET current_version_id=?,updated_at=?
              WHERE content_id=? AND current_version_id=?`,
@@ -225,7 +260,7 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
         }
       }
       base.approved += published;
-      names.set(name,'verified_external');
+      names.set(name,{sourceKind:'verified_external',versionId});
     } else {
       base.pending++;
     }

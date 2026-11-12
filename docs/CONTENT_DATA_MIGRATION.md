@@ -482,6 +482,66 @@ Cầu Rồng, Hồ Gươm, Fansipan vẫn chờ nguồn và ảnh. Để đạt 
 lượng cho đủ 34 tỉnh cần thêm dữ liệu nền từ nguồn du lịch chính thức,
 chưa thể giải quyết bằng việc phân loại RSS hoặc tăng số lượt tìm ảnh.
 
+## Bổ sung nguồn thật ngoài Wikipedia — OpenStreetMap (đọc ODbL theo tỉnh)
+
+**Vì sao trước đây chỉ thấy dữ liệu Wiki?** Các cổng Chính phủ, Cục Du lịch,
+VCCA và du lịch địa phương chủ yếu mới được ghi vào `trustedSources.ts`
+để đối chiếu nguồn. Chưa có bộ trích xuất dữ liệu đã cấp phép nên nội dung
+công khai vẫn do Wikipedia/Wikidata + bản thủ công cung cấp, còn RSS chỉ
+tạo các ứng viên chờ duyệt.
+
+**Quan trọng về giấy phép:** Trang du lịch chính thức
+[Vietnam.travel](https://vietnam.travel/vi/term-conditions/)
+công bố điều khoản 2026 **cấm scraping, sao chép/tái xuất bản** bài và
+ảnh nếu chưa có sự đồng ý bằng văn bản. Vì vậy không xây bot cào nội
+dung hoặc copy ảnh từ đó. Dùng liên kết nguồn để đối chiếu hoặc yêu cầu
+quyền API/bộ dữ liệu trước khi tích hợp. Các nguồn chính thống khác cũng
+phải kiểm tra riêng điều khoản và giấy phép, không mặc định được phép
+cào chỉ vì là website công khai.
+
+### Luồng dữ liệu mở bổ sung
+
+`npm run catalog:osm` truy vấn **Overpass API của OpenStreetMap** lấy
+những đối tượng có nhãn `tourism`, `historic` và `natural` trong
+ranh giới cấp tỉnh được OSM gắn `admin_level=4`. Từng đối tượng gồm:
+
+- Tên điểm, loại hình, nguồn `openstreetmap.org/node|way|relation/ID`.
+- Tọa độ ở Việt Nam và giấy phép **ODbL © OpenStreetMap contributors**.
+- Ứng viên trong `travel_core_candidates`, liên kết nguồn
+  `travel_core_candidate_sources` và bảng `travel_external_geodata`.
+- **Chỉ ở trạng thái chờ kiểm chứng**. OpenStreetMap không được tính là
+  một nguồn du lịch chính thống đủ điều kiện xuất bản. Không sử dụng
+  ảnh từ OpenStreetMap hoặc Google Maps.
+
+Chạy thử một tỉnh:
+
+```powershell
+cd "D:\dự án\vietnamtravel"
+git pull origin main
+npm run catalog:osm -- --province "Can Tho"
+npm run catalog:core-stage
+```
+
+Chạy toàn bộ 34 tỉnh (dành cho thử nghiệm một lần, có nghỉ giữa truy vấn
+để tôn trọng hạn mức API):
+
+```powershell
+npm run catalog:osm -- --all
+```
+
+**Giới hạn cần biết:** OSM có thể chưa cập nhật đầy đủ ranh giới tỉnh
+sau sáp nhập năm 2025, nên một số tỉnh có ít hoặc 0 kết quả; tọa độ,
+tên và tình trạng điểm đến vẫn cần xác minh. Truy vấn phụ thuộc dịch vụ
+Overpass cộng đồng, có thể bị 429/504, nên không đặt cron chạy hàng ngày
+trên server công cộng. Dùng dữ liệu OSM khi xuất bản phải hiện ghi công
+và đáp ứng điều kiện chia sẻ dữ liệu phái sinh theo ODbL:
+https://www.openstreetmap.org/copyright.
+
+Đây là **nguồn dữ liệu bên ngoài thực sự đầu tiên** được nối vào kho
+ứng viên ngoài Wikipedia, không phải cam kết đã lấy được dữ liệu của
+các trang chính thức/VCCA; với các trang đó cần API, hợp đồng dữ liệu
+hoặc phương án có sự cho phép rõ ràng trước.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

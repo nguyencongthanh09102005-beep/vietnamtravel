@@ -65,6 +65,25 @@ hiện khác biệt, chuẩn hóa và **đưa vào hàng chờ duyệt**. Chỉ 
 approved mới có thể xuất bản. Không cho Gemini/LLM tự bịa nguồn, giờ mở cửa,
 giá vé hay ảnh. Phân biệt `AI đề xuất` và `đã đối chiếu nguồn`.
 
+### Đợt 4 — Mã nguồn đã triển khai (chế độ an toàn)
+
+- `vercel.json`: chạy `/api/content/refresh` lúc **02:00 UTC hằng ngày** (sau khi bản mới được deploy và cấu hình).
+- `CRON_SECRET`: bắt buộc, tối thiểu 32 ký tự; Vercel Cron gửi `Authorization: Bearer <CRON_SECRET>`. Không đặt bí mật trong GitHub hay frontend.
+- Bộ lấy dữ liệu Wikipedia tiếng Việt chạy nền, tối đa 3 tỉnh/ngày, 2 truy vấn/tỉnh; kiểm tra liên kết nguồn, độ dài, tên và lọc trùng. Ảnh Wikimedia có cờ **phải kiểm tra giấy phép/tác giả** trước khi xuất bản.
+- Các đề xuất mới chỉ lưu `travel_content_versions.reviewed_status=pending`, **không tự công khai**. Đây là rào an toàn vì một nguồn cộng đồng chưa đủ chứng minh vị trí/giờ mở cửa/nguồn gốc món ăn. Website vẫn đọc dữ liệu đã được duyệt ngay.
+- API nội bộ `/api/content/review` yêu cầu **CONTENT_REVIEW_SECRET** riêng; hỗ trợ xem đề xuất, duyệt/từ chối, khôi phục một phiên bản đã duyệt. Không sử dụng cookie đăng nhập người dùng để cấp quyền duyệt.
+- Nếu `CRON_SECRET` chưa cài trên Vercel hoặc Vercel không thể triển khai, tác vụ **chưa hoạt động tự động**. Không nên tuyên bố dữ liệu đã tự cập nhật.
+- Bước tiếp theo để đạt **tự xuất bản**: tích hợp thêm nguồn địa lý/thông tin chính thức độc lập và quy tắc xác minh đủ nghiêm trước khi tự chuyển `pending → approved`. Những nội dung hành chính có rủi ro cao luôn yêu cầu đối chiếu nguồn công bố chính thức.
+
+#### Kiểm thử local
+
+```powershell
+npm run test:api
+node --test scripts/local-api.test.mjs
+```
+
+Không chạy tác vụ cập nhật thật trên Production khi chưa thiết lập bí mật và chưa kiểm tra điều khoản sử dụng dữ liệu, ảnh.
+
 ## Đợt 5 — Hành chính và bản đồ động
 
 Phát hiện văn bản chính thức về sáp nhập/đổi tên, lập ánh xạ tỉnh cũ → mới,

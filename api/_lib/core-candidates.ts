@@ -20,7 +20,7 @@ function supportedProvince(id:string):id is ProvinceId{
 function classifyUrl(url:string){
   const src=trustedSourceForUrl(url);
   if(!src)return null;
-  if(!['official_tourism','cuisine_association','travel_guide','news_discovery'].includes(src.role))
+  if(!['official_tourism','cuisine_association','travel_guide','news_discovery','open_geodata'].includes(src.role))
     return null;
   return src;
 }

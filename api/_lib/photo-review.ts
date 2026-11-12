@@ -26,6 +26,8 @@ export async function reviewPhotoImage(imageId:string,action:'approve'|'reject')
   if(!core&&!published)return {ok:false,reason:'NO_LINKED_ENTITY',attached:false};
   const original=published ? JSON.parse(String(published.payload_json)) as Record<string,unknown> : null;
   if(core && !matches(String(core.name)))return {ok:false,reason:'SUBJECT_MISMATCH',attached:false};
+  if(core && !['pending','ready_for_review'].includes(String(core.status)))
+    return {ok:false,reason:'CORE_ITEM_NOT_REVIEWABLE',attached:false};
   if(!core && original && (!matches(String(original.name))||
     original.taxonomyGateVersion!==2||original.image||
     published?.reviewed_status!=='approved'))

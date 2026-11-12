@@ -167,7 +167,7 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
     const row = await dbQuery(
       `INSERT OR IGNORE INTO travel_content_versions
        (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,checked_at,created_at)
-       VALUES (?,?,?,?,?,'verified_external',?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,'verified_external',?,?,?,?)`,
       [versionId,candidate.contentId,provinceId,section,JSON.stringify(verdict.payload),
         candidate.sourceRef,status,now.toISOString(),now.toISOString()]);
     if (!row.changes) continue;

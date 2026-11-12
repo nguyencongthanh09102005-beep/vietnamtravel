@@ -19,7 +19,15 @@ try{
     },
   });
   console.log('Source scan:',result);
-  console.log('Only pending source leads were saved. News is NEVER auto-published as a tourist attraction.');
-  if(args.includes('--ai')&&!process.env.GEMINI_API_KEY)
-    console.log('GEMINI_API_KEY is not set; kept original RSS leads without AI classification.');
+  if(args.includes('--ai')) {
+    if(!result.aiConfigured) {
+      console.log('AI NOT CONFIGURED: no GEMINI_API_KEY in local environment; all leads remain pending.');
+    } else if(result.classified===0) {
+      console.log('AI 0: model unavailable, returned unrecognizable JSON or no valid classification. Check Gemini model/API logs.');
+    } else {
+      console.log('AI classified',result.classified,'stored headlines in',result.aiBatches,
+        'requests. Still unclassified:',result.remainingUnclassified);
+    }
+  }
+  console.log('Only pending source leads are stored. RSS news is NEVER auto-published as a tourist attraction.');
 }finally{closeLocalDatabase();}

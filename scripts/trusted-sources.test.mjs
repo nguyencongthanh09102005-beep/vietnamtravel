@@ -181,3 +181,58 @@ test('when Wikidata P18 is missing, photo comes only from a Wikipedia article wi
   assert.equal(await findVerifiedCommonsPhoto({...props,
     articleUrl:'https://vi.wikipedia.org.evil.example/wiki/H%E1%BA%A1_Long',fetcher:badArticle}),null);
 });
+
+test('Commons exact depicts P180 finds a licensed photo when Wikidata P18 and Wikipedia image are absent',async()=>{
+  const image='https://upload.wikimedia.org/wikipedia/commons/thumb/b/bc/Can_Tho_place.jpg/640px-Can_Tho_place.jpg';
+  const seen=[];
+  const fetcher=async url=>{
+    const u=new URL(url);
+    seen.push(u.searchParams.get('list')||u.searchParams.get('prop'));
+    assert.equal(u.hostname,'commons.wikimedia.org');
+    if(u.searchParams.get('list')==='search'){
+      assert.equal(u.searchParams.get('srsearch'),'haswbstatement:P180=Q987654');
+      assert.equal(u.searchParams.get('srnamespace'),'6');
+      return Response.json({query:{search:[
+        {ns:0,title:'A misleading non-image result'},
+        {ns:6,title:'File:Can_Tho_place.jpg'},
+      ]}});
+    }
+    assert.equal(u.searchParams.get('titles'),'File:Can_Tho_place.jpg');
+    return Response.json({query:{pages:[{
+      title:'File:Can_Tho_place.jpg',
+      imageinfo:[{thumburl:image,descriptionurl:'https://commons.wikimedia.org/wiki/File:Can_Tho_place.jpg',
+        extmetadata:{LicenseShortName:{value:'CC BY-SA 4.0'},Artist:{value:'Verified photographer'}}}],
+    }]}});
+  };
+  const found=await findVerifiedCommonsPhoto({
+    wikidataId:'Q987654',wikidataEntry:{claims:{}},fetcher,
+  });
+  assert.equal(found?.image,image);
+  assert.match(found?.imageAttribution||'',/Verified photographer/);
+  assert.deepEqual(seen,['search','imageinfo']);
+});
+
+test('Commons depicts is not enough when image license is noncommercial or source file invalid',async()=>{
+  const fetcher=async url=>{
+    const u=new URL(url);
+    if(u.searchParams.get('list')==='search'){
+      return Response.json({query:{search:[
+        {ns:6,title:'File:Tempting_food_photo.jpg'},
+        {ns:6,title:'File:Irrelevant.svg'},
+        {ns:6,title:'File:Unsafe.jpg'},
+      ]}});
+    }
+    if(u.searchParams.get('titles')==='File:Tempting_food_photo.jpg'){
+      return Response.json({query:{pages:[{
+        title:'File:Tempting_food_photo.jpg',
+        imageinfo:[{thumburl:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Tempting_food_photo.jpg/640px-Tempting_food_photo.jpg',
+          descriptionurl:'https://commons.wikimedia.org/wiki/File:Tempting_food_photo.jpg',
+          extmetadata:{LicenseShortName:{value:'CC BY-NC 4.0'},Artist:{value:'Original photographer'}}}],
+      }]}});
+    }
+    return Response.json({query:{pages:[{missing:true}]}});
+  };
+  const photo=await findVerifiedCommonsPhoto({wikidataId:'Q333333',
+    wikidataEntry:{claims:{}},fetcher});
+  assert.equal(photo,null);
+});

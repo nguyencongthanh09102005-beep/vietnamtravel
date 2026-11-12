@@ -323,6 +323,42 @@ RSS chỉ tạo đề xuất **chờ kiểm chứng**, không tự đưa các ti
 danh sách Địa điểm/Ẩm thực. Bản thủ công không bị sửa, dữ liệu trên Turso
 online không bị đụng vào.
 
+## Kiểm tra kết quả AI RSS và ảnh Commons (từ log thực tế)
+
+Sau đợt sửa RSS, lần chạy đầu tiên ghi nhận `scanned=72`,
+`classified=72`, `aiBatches=9`. Có một thông báo Gemini HTTP 503 nhưng
+toàn bộ 72 bản đã được lưu nhãn. Đây là số bài **được phân loại**, không
+phải số địa điểm hoặc món ăn đủ điều kiện đăng. Lệnh
+`npm run catalog:sources -- --ai` hiện in thêm **Saved RSS labels by type**
+để phân biệt `news`, `places`, `cuisine`, `history`, `unknown`.
+
+Trong lượt `catalog:photos` sau đó, `checked=26`, `updated=0`,
+`unavailable=26`. Từ nay bộ lấy ảnh sẽ thử theo thứ tự:
+
+1. Ảnh P18 của đúng thực thể Wikidata (QID).
+2. Ảnh đại diện của bài Wikipedia **có cùng QID**, nếu P18 không có.
+3. Tìm file Wikimedia Commons có thông tin có cấu trúc
+   **Depicts P180 = đúng QID**, không tìm bằng từ khóa chung.
+4. Với tất cả ảnh ứng viên: kiểm tra file Commons, tác giả,
+   giấy phép cho phép sử dụng thương mại và trang ghi công. Nếu không
+   đạt, không dùng ảnh.
+
+Tham khảo [Commons Help:Search](https://commons.wikimedia.org/wiki/Help:Search).
+Đây là mở rộng **nguồn ảnh**, chưa cam kết tìm được ảnh cho tất cả 26 mục
+vì một số món ăn/điểm đến chưa có ảnh được gắn QID ở Commons.
+
+Sau khi kéo code, chạy trên **SQLite local**:
+
+```powershell
+git pull origin main
+npm run catalog:sources -- --ai
+npm run catalog:photos
+npm run dev
+```
+
+Không cần xóa bản ghi RSS, không chỉnh dữ liệu thủ công hoặc Turso online.
+Bộ lấy ảnh có thể tự chạy nền khi `npm run dev` theo cấu hình cũ.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

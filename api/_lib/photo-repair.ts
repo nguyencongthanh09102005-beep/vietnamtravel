@@ -48,13 +48,13 @@ export async function repairMissingPhotos(options:{
         `INSERT OR IGNORE INTO travel_content_versions
          (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,checked_at,created_at)
          VALUES (?,?,?,?,?,'verified_external',?,'approved',?,?)`,
-        [version,row.content_id,row.province_id,row.section,JSON.stringify(updated),
-          row.source_ref,new Date().toISOString(),new Date().toISOString()],
+        [version,String(row.content_id),String(row.province_id),String(row.section),JSON.stringify(updated),
+          String(row.source_ref ?? ''),new Date().toISOString(),new Date().toISOString()],
       );
       const change=await dbQuery(
         `UPDATE travel_content_items SET current_version_id=?,updated_at=?
          WHERE content_id=? AND current_version_id=?`,
-        [version,new Date().toISOString(),row.content_id,row.current_version_id]);
+        [version,new Date().toISOString(),String(row.content_id),String(row.current_version_id)]);
       summary.updated+=change.changes;
       options.onProgress?.(name,change.changes?'updated':'unavailable');
     }catch(error){

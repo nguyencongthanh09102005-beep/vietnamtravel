@@ -40,7 +40,7 @@ function localApi(): Plugin {
       for (const key of ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN', 'LOCAL_DB_PATH',
         'RESEND_API_KEY', 'AUTH_EMAIL_FROM', 'AUTH_PUBLIC_URL',
         'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_FALLBACK_MODEL', 'GOOGLE_MAPS_API_KEY',
-        'CRON_SECRET', 'CONTENT_REVIEW_SECRET']) {
+        'CRON_SECRET', 'CONTENT_REVIEW_SECRET', 'LOCAL_SOURCE_AI_CLASSIFY']) {
         if (process.env[key] === undefined && env[key] !== undefined) {
           process.env[key] = env[key];
         }
@@ -132,6 +132,37 @@ function localContentEnrichment(): Plugin {
       let closed = false;
       let startup: ReturnType<typeof setTimeout> | undefined;
       let daily: ReturnType<typeof setInterval> | undefined;
+      let photoStartup: ReturnType<typeof setTimeout> | undefined;
+      let feedStartup: ReturnType<typeof setTimeout> | undefined;
+      let photoDaily: ReturnType<typeof setInterval> | undefined;
+      let feedDaily: ReturnType<typeof setInterval> | undefined;
+      let photoBusy = false, feedBusy = false;
+      const localOnly = () => !closed && !process.env.TURSO_DATABASE_URL?.trim() &&
+        !process.env.TURSO_AUTH_TOKEN?.trim();
+      const photos = async () => {
+        if (!localOnly() || photoBusy) return;
+        photoBusy = true;
+        try {
+          const { repairMissingPhotos } = await server.ssrLoadModule('/api/_lib/photo-repair.ts');
+          const report = await repairMissingPhotos({ maxItems: 25 });
+          if (report.updated) console.info('[VietnamTravel] Licensed photographs added:', report.updated);
+        } catch(error) {
+          console.warn('[VietnamTravel] Photo repair skipped:', error);
+        } finally {photoBusy = false;}
+      };
+      const sources = async () => {
+        if (!localOnly() || feedBusy) return;
+        feedBusy = true;
+        try {
+          const { scanTrustedNewsFeeds } = await server.ssrLoadModule('/api/_lib/trusted-feeds.ts');
+          const report = await scanTrustedNewsFeeds({
+            withAi: process.env.LOCAL_SOURCE_AI_CLASSIFY === '1',
+          });
+          if (report.inserted) console.info('[VietnamTravel] New trusted news leads awaiting review:', report.inserted);
+        } catch(error) {
+          console.warn('[VietnamTravel] RSS metadata scan skipped:', error);
+        } finally {feedBusy = false;}
+      };
       const run = async () => {
         if (closed) return;
         if (process.env.TURSO_DATABASE_URL?.trim()) {
@@ -160,11 +191,21 @@ function localContentEnrichment(): Plugin {
         startup = setTimeout(() => { void run(); }, 5000);
         daily = setInterval(() => { void run(); }, 24 * 3600 * 1000);
         daily.unref?.();
+        // Independent from the slower whole-country catalog scan.
+        photoStartup = setTimeout(() => { void photos(); }, 9000);
+        feedStartup = setTimeout(() => { void sources(); }, 16000);
+        photoDaily = setInterval(() => { void photos(); }, 24 * 3600 * 1000);
+        feedDaily = setInterval(() => { void sources(); }, 24 * 3600 * 1000);
+        photoDaily.unref?.(); feedDaily.unref?.();
       });
       server.httpServer?.once('close', () => {
         closed = true;
         if (startup) clearTimeout(startup);
         if (daily) clearInterval(daily);
+        if (photoStartup) clearTimeout(photoStartup);
+        if (feedStartup) clearTimeout(feedStartup);
+        if (photoDaily) clearInterval(photoDaily);
+        if (feedDaily) clearInterval(feedDaily);
       });
     },
   };

@@ -9,7 +9,7 @@ export interface DiscoveryCandidate {
   provinceId: ProvinceId;
   section: 'places' | 'cuisine';
   sourceRef: string;
-  payload: { name: string; description: string; detail: string; image: string; sourceUrl: string; imageAttribution: string };
+  payload: { name: string; description: string; detail: string; image: string; sourceUrl: string; imageAttribution: string; imageLicense?: string; wikidataId?: string; coordinates?: unknown };
 }
 
 function normalize(value: string) {

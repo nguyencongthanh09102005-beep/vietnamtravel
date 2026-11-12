@@ -25,6 +25,7 @@ function digest(value: string) {
 }
 export function parseWikipediaSuggestions(
   raw: unknown, provinceId: ProvinceId, section: 'places' | 'cuisine',
+  includeExisting = false,
 ): DiscoveryCandidate[] {
   const root = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
   const query = root.query && typeof root.query === 'object' ? root.query as Record<string, unknown> : {};
@@ -44,7 +45,7 @@ export function parseWikipediaSuggestions(
     const name = normalize(title);
     if (!title || title.length > 150 || !extract || extract.length < 120 ||
       extract.length > 12000 || !provinceNames.some(name => normalize(extract).includes(name)) ||
-      existing.has(name) || seen.has(name) || provinceNames.includes(name) ||
+      (!includeExisting && existing.has(name)) || seen.has(name) || provinceNames.includes(name) ||
       /^(danh sach|du lich|am thuc|tinh |thanh pho |viet nam |lich su |van hoa )/.test(name)) continue;
     // An actual Wikipedia article is one candidate source, not proof that its
     // content is correct. Never publish it automatically or invent missing data.
@@ -79,6 +80,7 @@ export function parseWikipediaSuggestions(
 export async function discoverWikipedia(
   provinceId: ProvinceId, section: 'places' | 'cuisine',
   fetcher: typeof fetch = fetch,
+  includeExisting = false,
 ): Promise<DiscoveryCandidate[]> {
   const province = bareProvinceName(provinceDetailsCatalog[provinceId].title);
   const former = Object.entries(HISTORICAL_PROVINCE_ALIASES)
@@ -109,7 +111,7 @@ export async function discoverWikipedia(
       });
       if (!response.ok) throw new Error('WIKIPEDIA_HTTP_' + response.status);
       succeeded++;
-      for (const item of parseWikipediaSuggestions(await response.json() as unknown, provinceId, section)) {
+      for (const item of parseWikipediaSuggestions(await response.json() as unknown, provinceId, section, includeExisting)) {
         if (seen.has(item.contentId)) continue;
         seen.add(item.contentId);
         entries.push(item);

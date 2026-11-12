@@ -113,6 +113,7 @@ export async function queryOsmProvince(provinceId:ProvinceId,fetcher:typeof fetc
   const failures:string[]=[];
   let completed=0;
   let usedFallback=false;
+  let rateLimited=false;
   for(const group of ['tourism','heritage'] as const){
     // If a previous request already required a fallback, do not run another
     // heavyweight category on the same shared public instances.
@@ -133,7 +134,8 @@ export async function queryOsmProvince(provinceId:ProvinceId,fetcher:typeof fetc
           signal:AbortSignal.timeout(34000),
         });
         if(response.status===429){
-          throw Error('OVERPASS_RATE_LIMIT_429: stop and retry another day');
+          rateLimited=true;
+          throw Error('OVERPASS_RATE_LIMIT_429: stop and retry later');
         }
         if(!response.ok)throw Error('OVERPASS_HTTP_'+response.status);
         const body=await response.text();
@@ -159,12 +161,14 @@ export async function queryOsmProvince(provinceId:ProvinceId,fetcher:typeof fetc
       }
     }
     if(phaseData){
+      console.log('[OSM]',provinceId,group+':',phaseData.length,'candidate locations in response');
       for(const place of phaseData){
         const id=place.osmType+':'+place.osmId;
         if(seen.has(id))continue;
         seen.add(id);collected.push(place);
       }
     }
+    if(rateLimited)break; // respect API quotas even if we already have some data
   }
   if(completed===0)throw Error('OSM_FETCH_UNAVAILABLE: '+failures.join(' | ').slice(0,500));
   if(failures.length)console.warn('[OSM] Partial query failures:',failures.length,

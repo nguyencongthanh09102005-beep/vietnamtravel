@@ -142,12 +142,12 @@ export async function enqueueImagesForReview(options:{
 }={}){
   const max=Math.max(1,Math.min(50,options.maxItems??25));
   const rows=await dbQuery(
-    \`SELECT i.content_id,i.province_id,i.section,v.payload_json
+    `SELECT i.content_id,i.province_id,i.section,v.payload_json
      FROM travel_content_items i JOIN travel_content_versions v
      ON v.version_id=i.current_version_id
      WHERE i.current_version_id LIKE 'auto_v2_%'
        AND v.reviewed_status='approved' AND i.section IN ('places','cuisine')
-     ORDER BY i.province_id,i.section LIMIT 400\`,
+     ORDER BY i.province_id,i.section LIMIT 400`,
   );
   const summary={checked:0,newImages:0,missing:0};
   for(const row of rows.rows){
@@ -169,10 +169,10 @@ export async function enqueueImagesForReview(options:{
     if(!combined.length)summary.missing++;
     for(const item of combined){
       const result=await dbQuery(
-        \`INSERT OR IGNORE INTO travel_image_candidates
+        `INSERT OR IGNORE INTO travel_image_candidates
           (image_id,content_id,province_id,section,subject_name,image_url,
            source_url,source_kind,license,attribution,width,height,created_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)\`,
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [photoId(String(row.content_id),item.sourceUrl),String(row.content_id),id,
          String(row.section),payload.name,item.image,item.sourceUrl,item.sourceKind,
          item.license,item.attribution,item.width,item.height,new Date().toISOString()],

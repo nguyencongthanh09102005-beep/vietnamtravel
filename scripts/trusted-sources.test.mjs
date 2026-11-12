@@ -113,3 +113,71 @@ test('RSS scanner stores review-only leads without adding any public catalog row
   const published=await dbQuery('SELECT COUNT(*) AS n FROM travel_content_items WHERE content_id!=?',['test-hal']);
   assert.equal(published.rows[0].n,0);
 });
+
+test('Gemini --ai reclassifies already saved pending RSS headlines, without new inserts',async()=>{
+  const old=process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY='test-key-not-sent';
+  let calls=0;
+  try{
+    const fake=async url=>{
+      const host=new URL(url).hostname;
+      return new Response(`<rss><channel><item>
+        <title>Du lịch tại Vịnh Hạ Long hôm nay</title>
+        <link>https://${host}/du-lich/bai-viet-123.html</link>
+        <description>Tham khảo thông tin điểm đến</description>
+      </item></channel></rss>`,{status:200});
+    };
+    const generator=async prompt=>{
+      calls++;
+      const entries=JSON.parse(prompt.split('Nguồn chỉ có tiêu đề và tóm tắt: ')[1]);
+      return JSON.stringify({items:entries.map(x=>({
+        id:x.id,kind:'places',provinceId:'Quang Ninh',subject:'Vịnh Hạ Long',
+      }))});
+    };
+    const second=await scanTrustedNewsFeeds({fetcher:fake,withAi:true,generator});
+    assert.equal(second.inserted,0,'Previously saved RSS headlines must not be duplicated');
+    assert.equal(second.classified,3,'Old pending leads must be updated by --ai');
+    assert.equal(second.aiBatches,1);
+    assert.equal(second.remainingUnclassified,0);
+    assert.equal(calls,1);
+    const stored=await dbQuery('SELECT kind,province_id,review_status FROM travel_source_leads');
+    assert.ok(stored.rows.every(x=>x.kind==='places' && x.province_id==='Quang Ninh' &&
+      x.review_status==='pending'));
+    const again=await scanTrustedNewsFeeds({fetcher:fake,withAi:true,generator});
+    assert.equal(again.inserted,0);
+    assert.equal(again.classified,0);
+    assert.equal(again.aiBatches,0,'Already classified leads should not cost more Gemini requests');
+    assert.equal(calls,1);
+    const published=await dbQuery('SELECT COUNT(*) AS n FROM travel_content_items WHERE content_id!=?',['test-hal']);
+    assert.equal(published.rows[0].n,0,'News headlines are never public tourism cards');
+  }finally{
+    if(old===undefined)delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY=old;
+  }
+});
+
+test('when Wikidata P18 is missing, photo comes only from a Wikipedia article with matching QID',async()=>{
+  const fetcher=async url=>{
+    const u=new URL(url);
+    if(u.hostname==='vi.wikipedia.org')return Response.json({query:{pages:[{
+      title:'Vịnh Hạ Long',pageprops:{wikibase_item:'Q12345'},pageimage:'Ha_Long_Bay.jpg',
+    }]}});
+    if(u.hostname==='commons.wikimedia.org')return photoFetch()(url);
+    throw Error('No Wikidata call required when entry has empty claims');
+  };
+  const props={wikidataId:'Q12345',wikidataEntry:{claims:{}},
+    articleUrl:'https://vi.wikipedia.org/wiki/V%E1%BB%8Bnh_H%E1%BA%A1_Long',fetcher};
+  const result=await findVerifiedCommonsPhoto(props);
+  assert.equal(result?.image,thumb);
+  assert.match(result?.imageAttribution??'',/Photographer Test/);
+  const badArticle=async url=>{
+    const u=new URL(url);
+    if(u.hostname==='vi.wikipedia.org')return Response.json({query:{pages:[{
+      pageprops:{wikibase_item:'Q9999'},pageimage:'Ha_Long_Bay.jpg',
+    }]}});
+    throw Error('Commons should not be called for mismatched article entity');
+  };
+  assert.equal(await findVerifiedCommonsPhoto({...props,fetcher:badArticle}),null);
+  assert.equal(await findVerifiedCommonsPhoto({...props,
+    articleUrl:'https://vi.wikipedia.org.evil.example/wiki/H%E1%BA%A1_Long',fetcher:badArticle}),null);
+});

@@ -186,6 +186,9 @@ test('old generic RSS cards are quarantined without erasing RSS or letting users
 });
 
 test('image-queue skips generic entities before any API image lookup',async()=>{
+  await stageCoreCandidate({provinceId:'Da Nang',section:'places',
+    name:'Cầu Rồng Đà Nẵng',
+    sourceUrl:'https://vnexpress.net/du-lich/cau-rong-da-nang-123.html'});
   const calls=[];
   const spy=async url=>{calls.push(String(url));return Response.json({query:{search:[]}});};
   const result=await enqueueImagesForReview({fetcher:spy,maxItems:30});

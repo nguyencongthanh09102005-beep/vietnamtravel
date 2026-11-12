@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
 import { HISTORICAL_PROVINCE_ALIASES } from '../../src/data/historicalProvinceAliases.js';
 import type { ProvinceId } from '../../src/data/provincesData.js';
+import { isSubjectExcluded } from '../../src/utils/contentQuality.js';
 import type { CatalogSection } from '../../src/utils/contentArchive.js';
 
 export interface DiscoveryCandidate {
@@ -10,7 +11,7 @@ export interface DiscoveryCandidate {
   provinceId: ProvinceId;
   section: 'places' | 'cuisine';
   sourceRef: string;
-  payload: { name: string; description: string; detail: string; image: string; sourceUrl: string; imageAttribution: string; imageLicense?: string; imageStatus?: 'verified' | 'pending'; wikidataId?: string; coordinates?: unknown };
+  payload: { name: string; description: string; detail: string; image: string; sourceUrl: string; imageAttribution: string; imageLicense?: string; imageStatus?: 'verified' | 'pending'; wikidataId?: string; coordinates?: unknown; taxonomyGateVersion?: number; taxonomyEvidence?: { categories: string[]; wikidataDescription: string }; reviewReason?: string };
 }
 
 function normalize(value: string) {
@@ -47,6 +48,8 @@ export function parseWikipediaSuggestions(
       extract.length > 12000 || !provinceNames.some(name => normalize(extract).includes(name)) ||
       (!includeExisting && existing.has(name)) || seen.has(name) || provinceNames.includes(name) ||
       /^(danh sach|du lich|am thuc|tinh |thanh pho |viet nam |lich su |van hoa )/.test(name)) continue;
+    // Exclude obvious off-topic sources before spending extra verification calls.
+    if (isSubjectExcluded(title, section, extract.slice(0,350))) continue;
     // An actual Wikipedia article is one candidate source, not proof that its
     // content is correct. Never publish it automatically or invent missing data.
     const thumbnail = page.thumbnail && typeof page.thumbnail === 'object'

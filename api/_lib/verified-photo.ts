@@ -44,7 +44,7 @@ export async function findVerifiedCommonsPhoto(args:{
   if(!/^Q\d+$/.test(args.wikidataId)) return null;
   const fetcher=args.fetcher??fetch;
   let entity=asRecord(args.wikidataEntry);
-  if(!entity.claims) {
+  if(!args.wikidataEntry) {
     const url=new URL('https://www.wikidata.org/w/api.php');
     url.search=new URLSearchParams({
       action:'wbgetentities',ids:args.wikidataId,props:'claims',

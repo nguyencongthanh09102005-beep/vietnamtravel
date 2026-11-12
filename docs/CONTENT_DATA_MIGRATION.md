@@ -91,6 +91,18 @@ kiểm thử địa giới và dữ liệu SVG/bản đồ. Giữ tỉnh cũ là
 không làm mất liên kết lịch trình đã lưu. Đây là thay đổi hệ thống, **không
 nên cho AI trực tiếp sửa SVG hoặc lịch sử nếu thiếu bản đồ và văn bản chính thức**.
 
+### Đợt 5 — Đã triển khai ở mức phát hiện và giữ tương thích
+
+- Danh sách **29 tên tỉnh cũ** từ Nghị quyết số 202/2025/QH15 được giữ làm bí danh tìm kiếm trong `src/data/historicalProvinceAliases.ts`. Ví dụ: **Hà Giang → Tuyên Quang**, **Tiền Giang → Đồng Tháp**, **Bà Rịa – Vũng Tàu → TP.HCM**. Link `?province=...` cũ sẽ tự tìm về tỉnh hiện hành, không xóa dữ liệu lịch trình.
+- Nguồn: `https://xaydungchinhsach.chinhphu.vn/chi-tiet-34-don-vi-hanh-chinh-cap-tinh-tu-12-6-2025-119250612141845533.htm` (Báo Điện tử Chính phủ, văn bản 202/2025/QH15) và trang tin `https://xaydungchinhsach.chinhphu.vn/sap-nhap.html`.
+- `/api/administration/check` được lên lịch Vercel Cron hằng ngày lúc **03:00 UTC**. Khi được cấu hình `CRON_SECRET` và deploy, nó đọc nguồn chính thức, so sánh số lượng đơn vị hành chính với 34 tỉnh/thành hiện có và tạo bản ghi khi thấy thông tin mới, thay vì tự sửa dữ liệu nguồn.
+- `/api/administration/aliases` có thể đọc alias đã duyệt từ database và thêm bí danh mới bằng `CONTENT_REVIEW_SECRET` qua API quản trị; không cho xóa hoặc thay đổi bí danh cũ không kiểm chứng.
+- Hai bảng theo dõi `travel_admin_checks`, `travel_admin_candidates` và bảng bí danh `travel_province_aliases` được bổ sung mà không thay đổi dữ liệu người dùng.
+
+**Giới hạn bắt buộc:** Hệ thống hiện **tự phát hiện nguồn và đặt cảnh báo**, nhưng **chưa tự thay đổi địa giới hoặc tên tỉnh hiện tại**. Bản đồ đang dùng SVG cố định; muốn tự áp dụng sáp nhập trong tương lai phải có dữ liệu ranh giới số được cơ quan có thẩm quyền cung cấp, giấy phép phù hợp, kiểm tra tọa độ/topology và quy trình di chuyển provinceId có khả năng phục hồi. Không thể suy ra đường ranh giới từ văn bản tin tức, và không nên ghi đè các lịch trình đã lưu khi chưa xác minh.
+
+Trong năm 2026, nguồn chính thức hiện vẫn công bố **34 tỉnh/thành**; không tự giả định có đợt sáp nhập mới.
+
 ## Nguyên tắc vận hành
 
 - Khách mở trang sẽ đọc dữ liệu **đã lưu**, không chờ tác vụ AI.

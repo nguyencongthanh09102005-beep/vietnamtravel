@@ -64,3 +64,10 @@ test('pins improve Google Maps route links and preserve stop order',()=>{
   assert.equal(dayAirDistanceKm(stops,pins.slice(0,2)),null);
   assert.ok(dayAirDistanceKm(stops,pins)>0);
 });
+
+test('unverified map distance remains unknown', () => {
+  const stops = [place('a', 'Cầu Rồng'), place('b', 'Biển Mỹ Khê')];
+  assert.equal(dayAirDistanceKm(stops, []), null);
+  assert.equal(dayAirDistanceKm(stops, [{ id: 'a', lat: 16.06, lon: 108.23, label: 'Cầu Rồng' }]), null);
+  assert.equal(dayAirDistanceKm([place('a', 'Mì Quảng', 'food'), place('b', 'Chợ Hàn')], []), null);
+});

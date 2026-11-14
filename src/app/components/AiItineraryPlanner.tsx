@@ -75,6 +75,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
   const [revision, setRevision] = useState(1);
   const [selectedDay, setSelectedDay] = useState(1);
   const [editingStop, setEditingStop] = useState<string | null>(null);
+  const [editorExpanded, setEditorExpanded] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busySave, setBusySave] = useState(false);
@@ -258,6 +259,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
         ? { ...item, stops: [...item.stops, stop] } : item),
     }));
     setEditingStop(id);
+    setEditorExpanded(true);
   }
 
   async function savePlan() {
@@ -324,7 +326,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/75 p-0 sm:p-3">
       <section ref={dialog} role="dialog" aria-modal="true" tabIndex={-1}
         aria-labelledby="planner-title"
-        className="flex h-full max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden bg-white shadow-2xl outline-none sm:max-h-[94dvh] sm:rounded-3xl">
+        className="flex h-full max-h-[100dvh] w-full max-w-7xl flex-col overflow-hidden bg-white shadow-2xl outline-none sm:max-h-[94dvh] sm:rounded-3xl">
         <header className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
           <div className="min-w-0">
             <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
@@ -339,7 +341,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid gap-5 p-4 lg:grid-cols-[315px_minmax(0,1fr)] lg:gap-6 lg:p-6">
+          <div className="grid gap-5 p-4 lg:grid-cols-[285px_minmax(0,1fr)] lg:gap-6 lg:p-6">
             <aside className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <h3 className="mb-4 flex items-center gap-2 font-bold text-slate-900"><CalendarDays className="h-4 w-4"/> Thông tin chuyến đi</h3>
@@ -482,11 +484,11 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <label htmlFor="ai-trip-title" className="mb-1 block text-xs font-semibold uppercase tracking-wider text-emerald-700">Lịch trình đang {savedId ? 'chỉnh sửa' : 'soạn'}</label>
+                      <label htmlFor="ai-trip-title" className="mb-1 block text-xs font-semibold uppercase tracking-wider text-emerald-700">VIETNAMTRAVEL / AI PLANNER · {savedId ? 'BẢN LƯU' : 'BẢN NHÁP'}</label>
                       <input id="ai-trip-title" value={plan.title} maxLength={160}
                         onChange={event => changePlan(p => ({ ...p, title: event.target.value }))}
                         className="w-full rounded-lg border border-transparent bg-transparent px-1 py-1 text-lg font-extrabold text-slate-950 outline-none focus:border-slate-300 sm:text-xl" />
-                      <p className="mt-1 text-xs text-slate-500">{plan.days} ngày · {plan.partySize} người · {provincesData[plan.provinceId].name}</p>
+                      <p className="mt-1 text-xs text-slate-500">{plan.days} ngày · {plan.partySize} người · {provincesData[plan.provinceId].name} · {STYLE_CHOICES.find(style => style.id === plan.style)?.title}</p>
                     </div>
                     <button disabled={!authenticated || busySave} type="button" onClick={() => void savePlan()}
                       className="flex shrink-0 items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 disabled:opacity-50">
@@ -497,20 +499,22 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
 
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[11px] text-slate-500">Ngân sách tối đa</p>
+                      <p className="text-[11px] text-slate-500">Ngân sách dự kiến</p>
                       <p className="mt-1 text-sm font-bold text-slate-900">{price(plan.totalBudgetVnd)}</p>
                     </div>
                     <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-[11px] text-slate-500">Dự toán cả nhóm</p>
-                      <p className="mt-1 text-sm font-bold text-slate-900">{price(plan.estimatedSpendVnd)}</p>
+                      <p className="text-[11px] text-slate-500">Điểm dừng hôm nay</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">{currentDay?.stops.length ?? 0} điểm</p>
                     </div>
-                    <div className={'rounded-xl p-3 ' + (budgetOver ? 'bg-rose-50' : 'bg-emerald-50')}>
-                      <p className="text-[11px] text-slate-500">{budgetOver ? 'Đang vượt ngân sách' : 'Ngân sách còn lại'}</p>
-                      <p className={'mt-1 text-sm font-bold ' + (budgetOver ? 'text-rose-700' : 'text-emerald-700')}>
-                        {price(Math.abs(plan.budgetRemainingVnd))}
-                      </p>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-[11px] text-slate-500">Khoảng cách thực tế</p>
+                      <p className="mt-1 text-sm font-bold text-slate-900">Xem Google Maps</p>
                     </div>
                   </div>
+                  <p className={'mt-3 text-xs font-semibold ' + (budgetOver ? 'text-rose-700' : 'text-emerald-700')}>
+                    Dự toán cả nhóm: {price(plan.estimatedSpendVnd)} · {budgetOver ? 'Vượt ngân sách: ' : 'Còn lại: '}
+                    {price(Math.abs(plan.budgetRemainingVnd))}
+                  </p>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
                     <span>🍜 Ăn uống: {price(plan.budgetBreakdown.foodVnd)}</span>
                     <span>🏡 Lưu trú: {price(plan.budgetBreakdown.lodgingVnd)}</span>
@@ -521,12 +525,12 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
                   {plan.warnings.length ? <ul className="mt-3 space-y-1 text-xs text-amber-800">
                     {plan.warnings.map((warning, index) => <li key={index}>• {warning}</li>)}
                   </ul> : null}
-                  <p className="mt-3 text-[11px] text-slate-500">Dự toán cho toàn nhóm, chưa phải giá thực tế. Liên kết Google Maps chỉ mở trang tìm kiếm, không xác minh cửa hàng hoặc tuyến đường.</p>
+                  <p className="mt-3 text-[11px] text-slate-500">Dự toán cho cả nhóm, không phải giá thực tế. Tuyến đường và thời gian di chuyển thực tế được kiểm tra trên Google Maps.</p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
                   <nav aria-label="Chọn ngày trong lịch trình" className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                    {plan.schedule.map(day => <button key={day.day} type="button" onClick={() => setSelectedDay(day.day)}
+                    {plan.schedule.map(day => <button key={day.day} type="button" onClick={() => { setSelectedDay(day.day); setEditorExpanded(false); setEditingStop(null); }}
                       aria-pressed={selectedDay === day.day}
                       className={'shrink-0 rounded-full px-4 py-2 text-xs font-bold ' +
                         (selectedDay === day.day ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')}>
@@ -546,13 +550,21 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
                   {currentDay ? (
                     <div className="mb-4">
                       <ItineraryDayMap
+                        key={plan.provinceId + ':' + selectedDay}
                         provinceId={plan.provinceId}
                         provinceName={provincesData[plan.provinceId].name}
                         stops={currentDay.stops}
+                        onEditStop={stopId => { setEditingStop(stopId); setEditorExpanded(true); }}
                       />
                     </div>
                   ) : null}
-                  <div className="space-y-3">
+                  <div className="mt-4 border-t border-slate-100 pt-4">
+                    <button type="button" aria-expanded={editorExpanded} onClick={() => setEditorExpanded(value => !value)}
+                      className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-bold text-slate-700 hover:bg-slate-100">
+                      Chỉnh sửa các hoạt động ngày {selectedDay}
+                      <Pencil className="h-4 w-4" aria-hidden="true"/>
+                    </button>
+                    {editorExpanded ? <div className="mt-3 space-y-3">
                     {currentDay?.stops.map(stop => (
                       <article key={stop.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
                         {editingStop === stop.id ? (
@@ -629,7 +641,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
                         )}
                       </article>
                     ))}
-                  </div>
+                    </div> : null}
                   <button type="button" onClick={() => addStop(selectedDay)}
                     className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-4 py-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">
                     <Plus className="h-4 w-4"/> Thêm hoạt động thủ công

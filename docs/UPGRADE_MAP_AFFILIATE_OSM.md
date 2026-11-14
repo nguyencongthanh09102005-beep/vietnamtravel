@@ -51,3 +51,16 @@ The province detail panel now has a fifth **Dịch vụ** tab after Tổng quan,
 The owner generated a Klook affiliate destination link for Hà Nội through the official affiliate dashboard. The public tracking link is stored only in the Hanoi mapping in `src/utils/travel-affiliate.ts`, not globally, so other provinces do not inadvertently land on a Hanoi page.
 
 The link contains public `aid` and `aff_adid` parameters and an encoded `k_site` destination. No credentials are stored. Other regions continue using the existing Klook fallback or an approved generic partner override. Commission and click attribution must be verified later in the owner's affiliate dashboard.
+
+## AI Planner route-board UI — 14 November 2026
+
+The approved route-board layout now renders from real itinerary stops and OpenStreetMap geocoding:
+
+- Trip name, style, budget, daily stop count and an honest driving-distance placeholder
+- Day tabs and ordered, selectable timeline on the left
+- Interactive OSM tile map with synchronized numbered markers on the right
+- Non-geocoded activities stay in the itinerary; never fake a map pin
+- Distances between nearby stops are labelled explicitly as straight-line distances, never driving distances or times
+- Directions use Google Maps, with verified coordinates where available
+- Existing edit/add/delete actions are available in a collapsed section below the map
+- No routing subscription, fabricated timing, database schema change, Vercel deployment or main-branch update

@@ -590,7 +590,7 @@ export function AdminDashboard() {
               <p className="text-xs text-emerald-900">Bạn không cần tự tìm URL: dùng nút này để nhận gợi ý, sau đó kiểm tra bài gốc.</p>
               <button type="button" disabled={sourceBusy||!draft.name.trim()} onClick={()=>void searchSources()}
                 className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">
-                {sourceBusy?<LoaderCircle className="h-4 w-4 animate-spin"/>:<Search className="h-4 w-4"/>} AI tìm nguồn
+                {sourceBusy?<LoaderCircle className="h-4 w-4 animate-spin"/>:<Search className="h-4 w-4"/>} Tìm nguồn tự động
               </button>
             </div>
             {foundSources.length>0&&<div className="mt-3 space-y-2">

@@ -30,7 +30,7 @@ ADMIN_EMAILS=your-registered-admin@example.com
 LOCAL_CONTENT_AUTORUN=0
 ```
 
-Khi cần pipeline quét nền hoặc dùng hàng đợi local tự xử lý, bỏ dòng `LOCAL_CONTENT_AUTORUN=0` (hoặc đặt `1`) sau khi cân nhắc các kết nối/nguồn bên ngoài; server cần khởi động lại để đọc env mới. Lưu ý: dev adapter chỉ chạy admin worker trên SQLite local, không chạy trên Turso online. `LOCAL_CONTENT_AUTORUN=0` hiện cũng tắt dev worker. Với tài khoản admin chưa đăng ký, hãy đăng ký/đăng nhập trên VietnamTravel trước.
+Khi cần pipeline quét nền hoặc dùng hàng đợi local tự xử lý, bỏ dòng `LOCAL_CONTENT_AUTORUN=0` (hoặc đặt `1`) sau khi cân nhắc các kết nối/nguồn bên ngoài; server cần khởi động lại để đọc env mới. Lưu ý: dev adapter chỉ chạy admin worker trên SQLite local, không chạy trên Turso online. `LOCAL_CONTENT_AUTORUN=0` chỉ tắt quét nội dung tự phát; admin worker vẫn xử lý nút bấm trên SQLite local. Với tài khoản admin chưa đăng ký, hãy đăng ký/đăng nhập trên VietnamTravel trước.
 
 ```powershell
 npm run typecheck
@@ -57,7 +57,7 @@ Nếu `/admin` báo không có quyền: xác nhận `.env.local` có `ADMIN_EMAI
 - Ảnh thiếu ở **catalog gốc** cũng được tìm kiếm khi chạy hàng đợi, không chỉ nội dung `auto_v2`. Ưu tiên Commons, Openverse sau; Flickr chỉ khi chủ dự án có quyền dùng API thương mại. Ảnh phải thực sự đúng chủ thể và giữ link trang nguồn, tên tác giả, giấy phép.
 - Chỉ đưa ảnh **CC0 / CC BY / CC BY-SA / public domain** được bộ lọc hỗ trợ vào danh sách; NC/ND không được chọn. Gắn nguồn hay tải ảnh báo chí không tự tạo quyền tái sử dụng.
 - Ảnh có license hợp lệ trong kết quả tìm kiếm vẫn chỉ là **ứng viên chờ duyệt**; không tự xuất bản. Duyệt ảnh là một thao tác nội dung có phiên bản và nhật ký.
-- `/api/admin` chỉ đưa yêu cầu vào `travel_admin_jobs`. Worker xử lý từng đơn vị có checkpoint. Local worker trong Vite chạy theo chu kỳ khi `LOCAL_CONTENT_AUTORUN` bật và không dùng Turso; endpoint cron `/api/admin/worker` đòi `CRON_SECRET` dài tối thiểu 32 ký tự, cron khai báo trong `vercel.json` nhưng **không chạy cho đến khi được triển khai sau khi có sự cho phép riêng**.
+- `/api/admin` chỉ đưa yêu cầu vào `travel_admin_jobs`. Worker xử lý từng đơn vị có checkpoint. Local worker trong Vite chạy theo chu kỳ với `ADMIN_EMAILS` và SQLite local, kể cả khi `LOCAL_CONTENT_AUTORUN=0`; endpoint cron `/api/admin/worker` đòi `CRON_SECRET` dài tối thiểu 32 ký tự, cron khai báo trong `vercel.json` nhưng **không chạy cho đến khi được triển khai sau khi có sự cho phép riêng**.
 - Nếu API bên ngoài timeout/hết quyền hoặc job bị ngắt, trạng thái `failed` sẽ hiện trong UI; có thể tạo yêu cầu mới. Worker không bảo đảm hoàn thành toàn bộ một tỉnh trong một lần; trên serverless cần chú ý giới hạn thời gian chạy thực tế.
 
 ## Migration, fallback và những giới hạn chưa hoàn tất

@@ -132,7 +132,8 @@ function localContentEnrichment(): Plugin {
     name: 'vietnamtravel-local-enrichment',
     apply: 'serve',
     configureServer(server) {
-      if (process.env.LOCAL_CONTENT_AUTORUN === '0') return;
+      // Manual admin jobs run even when autonomous enrichment is disabled.
+      const autoContentEnabled=process.env.LOCAL_CONTENT_AUTORUN !== '0';
       let closed = false;
       let startup: ReturnType<typeof setTimeout> | undefined;
       let daily: ReturnType<typeof setInterval> | undefined;
@@ -200,6 +201,7 @@ function localContentEnrichment(): Plugin {
             .catch(error => console.warn('[admin-jobs]',error));
         }, 25000);
         adminWorker.unref?.();
+        if(!autoContentEnabled)return;
         startup = setTimeout(() => { void run(); }, 5000);
         daily = setInterval(() => { void run(); }, 24 * 3600 * 1000);
         daily.unref?.();

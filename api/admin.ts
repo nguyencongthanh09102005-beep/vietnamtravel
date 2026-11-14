@@ -107,7 +107,8 @@ async function summary() {
     pending:provinces.reduce((a,p)=>a+p.pending,0),missingImages:provinces.reduce((a,p)=>a+p.missingImages,0),
     missingSources:provinces.reduce((a,p)=>a+p.missingSources,0),
     missingCredits:provinces.reduce((a,p)=>a+p.missingCredits,0),
-    pendingPhotos:Number(photos.rows[0]?.count??0)}};
+    pendingPhotos:Number(photos.rows[0]?.count??0)},
+    sourceSearchMode:process.env.BRAVE_SEARCH_API_KEY?'web_index':'saved_rss_only'};
 }
 async function reviewQueue() {
   const [versions,photos]=await Promise.all([
@@ -311,6 +312,17 @@ async function enqueueAllSources(body:Body,actor:string) {
   await audit(actor,'enqueue_source_bulk','','',provinceId+':'+targets.length);
   return json({ok:true,state:'queued',jobId,total:targets.length});
 }
+async function manageJob(body:Body,actor:string) {
+  const jobId=text(body.jobId,100),action=text(body.action,30);
+  if(!/^[a-f0-9-]{36}$/.test(jobId))return json({error:'ID tác vụ không hợp lệ'},400);
+  const now=new Date().toISOString();
+  const result=action==='cancel-job'
+    ? await dbQuery("UPDATE travel_admin_jobs SET state='failed',error='CANCELLED_BY_ADMIN',finished_at=? WHERE job_id=? AND state='queued'",[now,jobId])
+    : await dbQuery("UPDATE travel_admin_jobs SET state='queued',error='',finished_at=NULL WHERE job_id=? AND state='failed' AND error<>'CANCELLED_BY_ADMIN'",[jobId]);
+  if(!result.changes)return json({error:'Không thể thay đổi trạng thái tác vụ'},409);
+  await audit(actor,action,'','',jobId);
+  return json({ok:true,status:action==='cancel-job'?'cancelled':'queued'});
+}
 async function approveMany(body:Body,actor:string) {
   const ids=body.versionIds;
   if(body.confirmHumanReview!==true || !Array.isArray(ids)||ids.length<1||ids.length>20 ||
@@ -397,6 +409,7 @@ export default {
       if(action==='source-search')return searchSources(body,session.user.id);
       if(action==='source-bulk')return enqueueAllSources(body,session.user.id);
       if(action==='approve-many')return approveMany(body,session.user.id);
+      if(action==='cancel-job'||action==='retry-job')return manageJob(body,session.user.id);
       if(action==='compose')return composeDescription(body);
       return json({error:'Thao tác không hỗ trợ'},400);
     } catch(error) {

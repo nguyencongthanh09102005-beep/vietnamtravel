@@ -90,6 +90,8 @@ export function AdminDashboard() {
   const [fatal,setFatal]=useState('');
   const [message,setMessage]=useState('');
   const [selectedPhotos,setSelectedPhotos]=useState<Record<string,string>>({});
+  const [sourceSearchMode,setSourceSearchMode]=useState('saved_rss_only');
+  const [confirmFindAll,setConfirmFindAll]=useState(false);
   const [savedSuggestions,setSavedSuggestions]=useState<SavedSuggestion[]>([]);
   const [foundSources,setFoundSources]=useState<SourceSuggestion[]>([]);
   const [sourceBusy,setSourceBusy]=useState(false);
@@ -97,8 +99,8 @@ export function AdminDashboard() {
   const [confirmBulk,setConfirmBulk]=useState(false);
   const [confirmReviewed,setConfirmReviewed]=useState(false);
 
-  const loadSummary=async()=>{const data=await apiGet<{totals:Totals;provinces:ProvinceStat[]}>('summary');
-    setTotals(data.totals);setStats(data.provinces);};
+  const loadSummary=async()=>{const data=await apiGet<{totals:Totals;provinces:ProvinceStat[];sourceSearchMode?:string}>('summary');
+    setTotals(data.totals);setStats(data.provinces);setSourceSearchMode(data.sourceSearchMode??'saved_rss_only');};
   const loadItems=async(id=province)=>{const data=await apiGet<{items:Item[]}>('items',id?'&provinceId='+encodeURIComponent(id):'');setItems(data.items);};
   const loadQueue=async()=>{const data=await apiGet<{versions:QueueVersion[];photos:QueuePhoto[]}>('queue');setVersions(data.versions);setPhotos(data.photos);};
   const loadJobs=async()=>{const data=await apiGet<{jobs:AdminJob[]}>('jobs');setJobs(data.jobs);};
@@ -412,11 +414,15 @@ export function AdminDashboard() {
 
       {tab==='update'&&<section className="mt-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold">Cập nhật theo tỉnh</h2>
-          <button type="button" disabled={busy} onClick={()=>void mutate({action:'source-bulk',provinceId:province||'*'},'Đã tạo hàng đợi tìm nguồn')}
+          <button type="button" disabled={busy} onClick={()=>setConfirmFindAll(true)}
             className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-40">
             <Search className="h-4 w-4"/> Tìm nguồn tất cả
           </button></div>
-        <p className="text-xs text-amber-800">Nếu chưa chọn tỉnh, nút sẽ quét nội dung thiếu nguồn trên cả 34 tỉnh. Nguồn chỉ là gợi ý, không tự xuất bản.</p>
+        <p className="text-xs text-amber-800">Nếu chưa chọn tỉnh, nút sẽ quét cả 34 tỉnh. Nguồn chỉ là gợi ý, không tự xuất bản.</p>
+        <p className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+          {sourceSearchMode==='web_index'?'Đã cấu hình tìm kiếm web. Mỗi mục có thể dùng API tìm kiếm có hạn mức/chi phí.':
+            'Chưa cấu hình BRAVE_SEARCH_API_KEY. Hiện chỉ tìm trong các nguồn RSS đã lưu; kết quả có thể rất ít.'}
+        </p>
         <p className="text-sm text-slate-500">Yêu cầu được xếp hàng, không giữ trang web chờ Openverse hoặc Overpass.</p>
         <select aria-label="Tỉnh cần cập nhật" value={province} onChange={e=>setProvince(e.target.value)}
           className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm sm:max-w-sm">
@@ -440,7 +446,13 @@ export function AdminDashboard() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100"><Clock3 className="h-4 w-4 text-slate-500"/></div>
           <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{label(job.kind)} · {provincesData[job.province_id as keyof typeof provincesData]?.name}</p>
             <p className="mt-1 text-xs text-slate-500">{job.error||safeText(job.result_json)}</p></div>
-          <span className={'rounded-full px-2 py-1 text-xs '+(job.state==='failed'?'bg-rose-50 text-rose-700':job.state==='completed'?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600')}>{label(job.state)}</span>
+          <div className="flex flex-col items-end gap-1">
+            <span className={'rounded-full px-2 py-1 text-xs '+(job.state==='failed'?'bg-rose-50 text-rose-700':job.state==='completed'?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600')}>{job.error==='CANCELLED_BY_ADMIN'?'Đã hủy':label(job.state)}</span>
+            {job.state==='queued'&&<button type="button" disabled={busy} onClick={()=>void mutate({action:'cancel-job',jobId:job.job_id},'Đã hủy yêu cầu chưa chạy.')}
+              className="text-xs text-rose-700 underline">Hủy</button>}
+            {job.state==='failed'&&job.error!=='CANCELLED_BY_ADMIN'&&<button type="button" disabled={busy} onClick={()=>void mutate({action:'retry-job',jobId:job.job_id},'Đã đưa tác vụ lỗi trở lại hàng đợi.')}
+              className="text-xs text-emerald-700 underline">Chạy lại</button>}
+          </div>
         </div>)}
         <h3 className="pt-4 text-sm font-semibold">Nguồn gợi ý tìm được ({savedSuggestions.length})</h3>
         <p className="text-xs text-slate-500">Nguồn gợi ý chưa được xác minh. Mở từng bài, đối chiếu thông tin rồi chọn đưa vào bản nháp.</p>
@@ -483,6 +495,19 @@ export function AdminDashboard() {
       </section>}
     </div>
 
+    {confirmFindAll&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="presentation" onClick={()=>setConfirmFindAll(false)}>
+      <section role="dialog" aria-modal="true" aria-label="Xác nhận tìm tất cả nguồn" onClick={e=>e.stopPropagation()}
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 className="text-lg font-bold">Tìm nguồn tất cả?</h2>
+        <p className="mt-2 text-sm text-slate-600">Phạm vi: {province?provincesData[province as keyof typeof provincesData]?.name:'34 tỉnh/thành'}. Hệ thống tạo danh sách các mục thiếu hai nguồn và tìm từng mục theo hàng đợi.</p>
+        <p className="mt-2 text-xs text-amber-800">Các lần gọi API tìm kiếm có thể tính phí hoặc dùng hạn mức của nhà cung cấp. Bạn có thể hủy những tác vụ còn trong hàng đợi.</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={()=>setConfirmFindAll(false)} className="rounded-xl border px-3 py-2 text-sm">Hủy</button>
+          <button type="button" disabled={busy} onClick={()=>{setConfirmFindAll(false);void mutate({action:'source-bulk',provinceId:province||'*'},'Đã tạo hàng đợi tìm nguồn');}}
+            className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Tạo hàng đợi</button>
+        </div>
+      </section>
+    </div>}
     {confirmBulk&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="presentation" onClick={()=>setConfirmBulk(false)}>
       <section role="dialog" aria-modal="true" aria-label="Xác nhận duyệt nhiều nội dung"
         onClick={e=>e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">

@@ -190,6 +190,24 @@ const schema = [
     PRIMARY KEY (osm_type,osm_id)
   )`,
   'CREATE INDEX IF NOT EXISTS travel_osm_by_province_idx ON travel_external_geodata(province_id)',
+  // Small, province-specific Wikipedia coordinates accepted only for known
+  // destination names whose article text confirms the correct province.
+  // Never published as editorial content or image records automatically.
+  `CREATE TABLE IF NOT EXISTS travel_wikipedia_geodata (
+    province_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    source_url TEXT NOT NULL,
+    checked_at INTEGER NOT NULL,
+    PRIMARY KEY(province_id,name)
+  )`,
+  'CREATE INDEX IF NOT EXISTS travel_wiki_province_idx ON travel_wikipedia_geodata(province_id)',
+  `CREATE TABLE IF NOT EXISTS travel_wiki_bootstrap (
+    province_id TEXT PRIMARY KEY,
+    attempted_at INTEGER NOT NULL,
+    found INTEGER NOT NULL DEFAULT 0
+  )`,
 
 
 

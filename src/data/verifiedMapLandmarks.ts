@@ -14,6 +14,26 @@ export interface ReviewedMapLandmark {
  * with a published coordinate source. Never replace a place with a nearby hotel.
  */
 export const REVIEWED_MAP_LANDMARKS: Partial<Record<ProvinceId, readonly ReviewedMapLandmark[]>> = {
+  // Coordinates sourced from named landmark articles / public cultural records,
+  // not aerial-photo camera positions or district centroids.
+  'Ho Chi Minh': [
+    { name: 'Chợ Bến Thành', latitude: 10.77252069383567, longitude: 106.69801917744711,
+      sourceUrl: 'https://en.wikipedia.org/wiki/Bến_Thành_Market' },
+    { name: 'Dinh Độc Lập', latitude: 10.777108, longitude: 106.695441,
+      sourceUrl: 'https://vi.wikipedia.org/wiki/Dinh_Độc_Lập' },
+    { name: 'Landmark 81', latitude: 10.795, longitude: 106.7219,
+      sourceUrl: 'https://en.wikipedia.org/wiki/Landmark_81' },
+  ],
+  'Ha Noi': [
+    { name: 'Hồ Hoàn Kiếm', latitude: 21.02889, longitude: 105.85250,
+      sourceUrl: 'https://en.wikipedia.org/wiki/Hoàn_Kiếm_Lake' },
+    { name: 'Văn Miếu - Quốc Tử Giám', latitude: 21.0277, longitude: 105.8355,
+      sourceUrl: 'https://cdt.gov.vn/data/van-mieu-quoc-tu-giam' },
+  ],
+  'Da Nang': [
+    { name: 'Cầu Rồng', latitude: 16.06111, longitude: 108.22667,
+      sourceUrl: 'https://en.wikipedia.org/wiki/Dragon_Bridge_(Da_Nang)' },
+  ],
   'Son La': [
     {
       name: 'Thác Dải Yếm',

@@ -44,7 +44,7 @@ export interface PriorityMapPlace {
   name: string;
   latitude: number;
   longitude: number;
-  source: 'osm_published' | 'geocode_cache' | 'reviewed_reference';
+  source: 'osm_published' | 'geocode_cache' | 'reviewed_reference' | 'wikipedia_coordinates';
   sourceUrl?: string;
 }
 
@@ -87,10 +87,23 @@ export async function getPriorityMapPlaces(provinceId: ProvinceId): Promise<Prio
   } catch (error) {
     console.warn('[map-catalog] cached geocodes unavailable', String(error).slice(0, 120));
   }
-  // These 2026 public reference coordinates are distinct named landmarks,
+  // These public reference coordinates are distinct named landmarks,
   // not arbitrary center points for a city or province.
   for (const place of REVIEWED_MAP_LANDMARKS[provinceId] ?? []) {
     add({ ...place, source: 'reviewed_reference' });
+  }
+  try {
+    const wiki = await dbQuery(
+      'SELECT name,latitude,longitude,source_url FROM travel_wikipedia_geodata WHERE province_id=? LIMIT 60',
+      [provinceId],
+    );
+    for (const row of wiki.rows) {
+      add({ name: String(row.name), latitude: Number(row.latitude),
+        longitude: Number(row.longitude), source: 'wikipedia_coordinates',
+        sourceUrl: String(row.source_url) });
+    }
+  } catch (error) {
+    console.warn('[map-catalog] wikipedia geodata unavailable', String(error).slice(0, 120));
   }
   try {
   const published = await dbQuery(

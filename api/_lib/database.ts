@@ -223,6 +223,15 @@ const schema = [
     created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT
   )`,
   'CREATE INDEX IF NOT EXISTS admin_jobs_status_idx ON travel_admin_jobs(state,created_at)',
+  `CREATE TABLE IF NOT EXISTS travel_content_source_suggestions (
+    content_id TEXT NOT NULL,province_id TEXT NOT NULL,section TEXT NOT NULL,
+    source_url TEXT NOT NULL,title TEXT NOT NULL,snippet TEXT NOT NULL,
+    source_host TEXT NOT NULL,provider TEXT NOT NULL,
+    review_status TEXT NOT NULL DEFAULT 'suggested',
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(content_id,source_url)
+  )`,
+  'CREATE INDEX IF NOT EXISTS source_suggestions_content_idx ON travel_content_source_suggestions(content_id,review_status)',
 ];
 
 const hosted = () => Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production';

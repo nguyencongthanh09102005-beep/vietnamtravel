@@ -647,6 +647,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
                     <Plus className="h-4 w-4"/> Thêm hoạt động thủ công
                   </button>
                 </div>
+                </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-5">
                   <p className="flex items-center gap-2 text-xs text-slate-500">

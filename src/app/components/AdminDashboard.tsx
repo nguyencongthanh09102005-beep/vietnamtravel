@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Archive, ArrowLeft, BookOpen, Check, ChevronRight, Clock3, ExternalLink,
   FileSearch, ImageOff, Images, LoaderCircle, MapPinned, MoreHorizontal,
-  Pencil, Plus, RefreshCw, Search, ShieldCheck, Utensils, X } from 'lucide-react';
+  Pencil, Plus, RefreshCw, Search, ShieldCheck, Sparkles, Utensils, X } from 'lucide-react';
 import { provincesData } from '../../data/provincesData';
 
 type Tab='content'|'review'|'update'|'report';
@@ -39,11 +39,12 @@ async function apiGet<T>(view:string,query=''):Promise<T> {
   if(!response.ok)throw Error(payload.error??'Không thể tải dữ liệu quản trị');
   return payload;
 }
-async function apiPost(body:Record<string,unknown>):Promise<void> {
+async function apiPost<T=unknown>(body:Record<string,unknown>):Promise<T> {
   const response=await fetch('/api/admin',{method:'POST',credentials:'same-origin',
     headers:{'Content-Type':'application/json','X-VT-Admin':'1'},body:JSON.stringify(body)});
   const data=await response.json() as {error?:string};
   if(!response.ok)throw Error(data.error??'Không lưu được thay đổi');
+  return data as unknown as T;
 }
 function Thumb({src,kind}:{src:string;kind:Section}) {
   const [broken,setBroken]=useState(false);
@@ -66,6 +67,7 @@ export function AdminDashboard() {
   const [tab,setTab]=useState<Tab>('content');
   const [province,setProvince]=useState('');
   const [kind,setKind]=useState('');
+  const [quality,setQuality]=useState('');
   const [keyword,setKeyword]=useState('');
   const [totals,setTotals]=useState<Totals>({provinces:34,published:0,pending:0,
     missingImages:0,missingSources:0,missingCredits:0,pendingPhotos:0});
@@ -108,9 +110,13 @@ export function AdminDashboard() {
   },[tab]);
   const filtered=useMemo(()=>items.filter(item=>
     (!kind||kind===item.section)&&
+    (!quality || (quality==='missing-image'&&!item.image) ||
+      (quality==='missing-source'&&item.section==='cuisine'&&item.sourceUrls.length===0) ||
+      (quality==='missing-credit'&&!!item.image&&(!item.imageLicense||!item.imageAttribution)) ||
+      (quality==='archived'&&item.status==='archived'))&&
     (item.name+' '+provincesData[item.provinceId as keyof typeof provincesData]?.name)
       .toLocaleLowerCase('vi').includes(keyword.toLocaleLowerCase('vi'))
-  ),[items,kind,keyword]);
+  ),[items,kind,keyword,quality]);
   const groupedPhotos=useMemo(()=>{
     const groups=new Map<string,QueuePhoto[]>();
     for(const photo of photos)groups.set(photo.contentId,[...(groups.get(photo.contentId)??[]),photo]);
@@ -133,6 +139,18 @@ export function AdminDashboard() {
     try {await apiPost(body);setDraft(null);await reload();setMessage(success);}
     catch(err){setMessage(err instanceof Error?err.message:String(err));}
     finally {setBusy(false);}
+  };
+  const compose=async()=>{
+    if(!draft||busy)return;
+    setBusy(true);setMessage('');
+    try {
+      const result=await apiPost<{description:string}>({action:'compose',name:draft.name,
+        description:draft.description,detail:draft.detail,
+        sourceUrls:[draft.sourceOne,draft.sourceTwo]});
+      setDraft(prev=>prev?{...prev,description:result.description}:prev);
+      setMessage('AI đã đề xuất mô tả; hãy kiểm tra kỹ trước khi lưu.');
+    }catch(error){setMessage(error instanceof Error?error.message:String(error));}
+    finally{setBusy(false);}
   };
   const submit=async()=>{
     if(!draft)return;
@@ -196,7 +214,7 @@ export function AdminDashboard() {
             <Plus className="h-4 w-4"/> Thêm mới
           </button>
         </div>
-        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_190px_145px]">
+        <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_190px_145px_160px]">
           <label className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400"/>
             <span className="sr-only">Tìm kiếm nội dung</span>
             <input value={keyword} onChange={event=>setKeyword(event.target.value)} placeholder="Tìm tên địa điểm, món ăn..."
@@ -209,6 +227,12 @@ export function AdminDashboard() {
           <select aria-label="Lọc loại nội dung" value={kind} onChange={e=>setKind(e.target.value)}
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
             <option value="">Tất cả loại</option><option value="places">Địa điểm</option><option value="cuisine">Ẩm thực</option>
+          </select>
+          <select aria-label="Lọc chất lượng" value={quality} onChange={e=>setQuality(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+            <option value="">Tất cả trạng thái</option><option value="missing-image">Thiếu ảnh</option>
+            <option value="missing-source">Thiếu nguồn món ăn</option>
+            <option value="missing-credit">Thiếu ghi công ảnh</option><option value="archived">Đã gỡ</option>
           </select>
         </div>
         <div className="divide-y divide-slate-100">
@@ -391,7 +415,14 @@ export function AdminDashboard() {
           <label className="block text-xs font-semibold">URL nguồn 2 (website độc lập)
             <input type="url" value={draft.sourceTwo} onChange={e=>setDraft(x=>x?{...x,sourceTwo:e.target.value}:x)}
               placeholder="https://..." className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label>
+          <button type="button" disabled={busy||!draft.description.trim()||!draft.sourceOne||!draft.sourceTwo}
+            onClick={()=>void compose()}
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 px-3 py-2.5 text-sm font-semibold text-emerald-800 disabled:opacity-40">
+            <Sparkles className="h-4 w-4"/> AI biên tập 2–3 câu
+          </button>
+          <p className="text-xs text-slate-500">AI chỉ diễn đạt lại nội dung bạn đã kiểm tra, không tự xác minh các link nguồn. Kết quả không tự xuất bản.</p>
         </div>}
+        {message&&<p role="status" className="mt-4 text-sm text-amber-800">{message}</p>}
         <div className="mt-auto flex justify-end gap-2 border-t border-slate-100 pt-5">
           <button type="button" disabled={busy} onClick={()=>setDraft(null)}
             className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm">Hủy</button>

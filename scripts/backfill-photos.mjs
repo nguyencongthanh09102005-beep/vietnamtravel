@@ -6,11 +6,11 @@ if(process.env.TURSO_DATABASE_URL||process.env.TURSO_AUTH_TOKEN||process.env.VER
   throw new Error('SAFETY_STOP: local SQLite only; never modify Production Turso');
 if(process.argv.slice(2).length)throw new Error('Usage: npm run catalog:photos');
 const {closeLocalDatabase}=await import('../.api-test-dist/api/_lib/database.js');
-const {repairMissingPhotos}=await import('../.api-test-dist/api/_lib/photo-repair.js');
+const {enqueueImagesForReview}=await import('../.api-test-dist/api/_lib/photo-queue.js');
 try {
-  const report=await repairMissingPhotos({maxItems:25});
+  const report=await enqueueImagesForReview({maxItems:25,includeLegacy:true});
   console.log('LEGACY PHOTO COMMAND: now STAGES review candidates only.');
-  console.log('Checked:',report.examined,'pending candidates:',report.queued,
-    'unavailable:',report.unavailable,'errors:',report.errors);
+  console.log('Checked:',report.checked,'pending candidates:',report.newImages,
+    'missing:',report.missing,'errors:',report.errors);
   console.log('Nothing is published. Review images with npm run catalog:image-review or the /admin dashboard.');
 }finally{closeLocalDatabase();}

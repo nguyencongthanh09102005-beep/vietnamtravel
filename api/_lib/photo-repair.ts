@@ -14,7 +14,7 @@ export async function repairMissingPhotos(options:{
 }={}):Promise<PhotoRepairSummary>{
   const queued=await enqueueImagesForReview({
     fetcher:options.fetcher,maxItems:Math.min(50,Math.max(1,options.maxItems??25)),
-    includeLegacy:true,includeOpenverse:false,
+    includeLegacy:false,includeOpenverse:false,
   });
   return {examined:queued.checked,updated:0,queued:queued.newImages,
     unavailable:queued.missing,errors:queued.errors.length};

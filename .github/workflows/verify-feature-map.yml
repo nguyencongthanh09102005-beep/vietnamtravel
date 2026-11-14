@@ -26,5 +26,7 @@ jobs:
         run: npm run typecheck:api
       - name: API tests
         run: npm run test:api
+      - name: Audit media and local cuisine sources (ephemeral SQLite only)
+        run: npm run catalog:media-audit
       - name: Vite production build (no deployment)
         run: npm run build

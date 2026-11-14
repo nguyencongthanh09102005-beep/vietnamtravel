@@ -49,7 +49,7 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
       <section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="discovery-detail-title"
         className="flex max-h-[94dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-none sm:rounded-3xl">
         <div className="relative h-48 shrink-0 bg-slate-100 sm:h-72">
-          <ImageWithFallback src={item.image} alt={item.name} placeholderKind={kind} loading="eager" className="h-full w-full object-cover"/>
+          <ImageWithFallback src={item.imageStatus === 'pending' ? '' : item.image} alt={item.name} placeholderKind={kind} loading="eager" className="h-full w-full object-cover"/>
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent"/>
           <button type="button" onClick={onClose} aria-label="Đóng thông tin chi tiết"
             className="absolute right-3 top-3 rounded-full bg-white/95 p-2 text-gray-900 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">

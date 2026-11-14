@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-const { travelServiceLinks } = await import('../.api-test-dist/src/utils/travel-affiliate.js');
+const { travelServiceLinks, travelDestinationLabel, canOfferTravelServices } = await import('../.api-test-dist/src/utils/travel-affiliate.js');
 
 test('unconfigured travel service links are not mislabeled as affiliate',()=>{
   const services=travelServiceLinks('Đà Nẵng');
@@ -25,4 +25,19 @@ test('unsafe or malformed affiliate URLs always fall back to normal links',()=>{
     assert.equal(service.partnerConfigured,false);
     assert.ok(service.url.startsWith('https://www.booking.com/'));
   }
+});
+
+test('province-specific service links and labels are honest about destination',()=>{
+  assert.equal(travelDestinationLabel('TP. Hà Nội'), 'Hà Nội');
+  assert.equal(travelDestinationLabel('Tỉnh Đồng Tháp'), 'Đồng Tháp');
+  const haNoi=travelServiceLinks('Hà Nội'), canTho=travelServiceLinks('TP. Cần Thơ');
+  assert.match(haNoi.find(x=>x.id==='traveloka').caption,/Hà Nội/);
+  assert.match(canTho.find(x=>x.id==='vexere').caption,/Cần Thơ/);
+  assert.match(decodeURIComponent(canTho[0].url),/Cần Thơ/);
+  assert.ok(!canTho.find(x=>x.id==='traveloka').destinationPrefilled);
+  assert.ok(haNoi.find(x=>x.id==='klook').destinationPrefilled);
+  assert.ok(!canTho.find(x=>x.id==='klook').destinationPrefilled);
+  assert.equal(canOfferTravelServices('Ha Noi'),true);
+  assert.equal(canOfferTravelServices('Hoang Sa'),false);
+  assert.equal(canOfferTravelServices('Truong Sa'),false);
 });

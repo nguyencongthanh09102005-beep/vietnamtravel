@@ -1,4 +1,3 @@
-import { TravelServicesPanel } from './TravelServicesPanel';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, ArrowRight, BookmarkCheck, CalendarDays, Check, ChevronRight,
@@ -429,8 +428,6 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
                   <p className="text-[11px] leading-4 text-slate-500">Lưu trú, di chuyển và quỹ dự phòng được tính trong ngân sách. Giá chỉ là ước tính, không phải báo giá trực tiếp.</p>
                 </div>
               </div>
-
-              <TravelServicesPanel provinceName={plan ? provincesData[plan.provinceId].name : provincesData[form.provinceId].name} />
 
               {authenticated ? (
                 <section className="rounded-2xl border border-slate-200 bg-white p-4">

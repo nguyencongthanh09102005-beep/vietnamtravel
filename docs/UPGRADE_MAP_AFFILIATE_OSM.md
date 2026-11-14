@@ -34,3 +34,14 @@ Only paste approved public **HTTPS** affiliate tracking links (optionally with {
 ## Vercel safety
 
 This branch's vercel.json intentionally sets git.deploymentEnabled=false to prevent **automatic** Git-triggered deployments. **Do not merge that flag into production without separately deciding how future deployments should work.** The production main branch stays unchanged by creating this feature branch. No Vercel API/CLI actions are part of this upgrade.
+
+
+## Dedicated Dịch vụ tab (2026-11-14)
+
+The province detail panel now has a fifth **Dịch vụ** tab after Tổng quan, Lịch sử, Địa điểm and Ẩm thực. The old panel below every tab and the duplicate AI planner sidebar panel have been removed. All service headings update with the selected province.
+
+- **Di chuyển:** Traveloka flights and VeXeRe coach links. As provider landing pages are not verified location-specific deep links, visitors must choose their departure, destination and dates at the vendor.
+- **Lưu trú:** Booking.com search URL pre-fills the chosen province.
+- **Trải nghiệm:** Klook opens a verified Hanoi destination page for Hà Nội, or the general Klook portal for other provinces until verified deep links are added.
+- **Hoàng Sa/Trường Sa:** Unsupported commercial ticket and hotel booking cards are hidden.
+- Booking availability, fares and actual affiliate commission have not been verified.

@@ -1,18 +1,19 @@
 import { TravelServicesPanel } from './TravelServicesPanel';
 import { useEffect, useState, type ComponentType } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, Clock, Info, MapPin, Utensils } from 'lucide-react';
+import { Camera, Clock, Info, MapPin, Ticket, Utensils } from 'lucide-react';
 import { DiscoveryDetailOverlay, type DiscoveryKind } from './DiscoveryDetailOverlay';
 import { provinceDetailsCatalog, type ProvinceDetailsCatalogItem } from '../../data/provinceDetailsData';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
-type TabType = 'overview' | 'history' | 'places' | 'cuisine';
+type TabType = 'overview' | 'history' | 'places' | 'cuisine' | 'services';
 
 const TABS: Array<{ id: TabType; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: 'Tổng quan', icon: Info },
   { id: 'history', label: 'Lịch sử', icon: Clock },
   { id: 'places', label: 'Địa điểm', icon: Camera },
   { id: 'cuisine', label: 'Ẩm thực', icon: Utensils },
+  { id: 'services', label: 'Dịch vụ', icon: Ticket },
 ];
 
 function formatStatValue(value: string) {
@@ -220,9 +221,11 @@ export function ProvinceDetails({ province }: { province: string }) {
                 </div>
               </div>
             )}
+            {activeTab === 'services' && (
+              <TravelServicesPanel provinceName={title} provinceId={province} />
+            )}
           </motion.div>
         </AnimatePresence>
-        <div className="mt-5"><TravelServicesPanel provinceName={title} /></div>
       </div>
       {selectedItem && detail && (
         <DiscoveryDetailOverlay kind={selectedItem.kind} item={detail} provinceTitle={title}

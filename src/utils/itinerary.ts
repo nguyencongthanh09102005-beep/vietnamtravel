@@ -30,6 +30,8 @@ export interface ItineraryStop {
   estimatedCostVnd: number;
   category: CostCategory;
   source: SourceKind;
+  /** Optional server-validated location ID. Old manually entered/saved stops have none. */
+  placeId?: string | null;
   /** Search link, NOT a verified listing, route, or coordinates. */
   mapUrl: string | null;
 }
@@ -146,6 +148,10 @@ export function normalizeItinerary(value: unknown, request: ItineraryRequest): S
         estimatedCostVnd: stop.estimatedCostVnd,
         category: stop.category as CostCategory,
         source: stop.source === 'catalog' ? 'catalog' : 'ai_suggestion',
+        // Preserve ID for newly generated plans and saved plans, without
+        // modifying legacy schemaVersion 1 itineraries.
+        ...(typeof stop.placeId === 'string' && /^p_[0-9a-f]{20}$/.test(stop.placeId)
+          ? { placeId: stop.placeId } : {}),
         mapUrl: searchUrl(title, provinceLabel),
       });
     }

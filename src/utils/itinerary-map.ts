@@ -1,6 +1,6 @@
 import type { ItineraryStop } from './itinerary.js';
 
-export type MapStop = Pick<ItineraryStop, 'id' | 'title' | 'category'>;
+export type MapStop = Pick<ItineraryStop, 'id' | 'title' | 'category' | 'placeId'>;
 export interface MappedStop {
   id: string;
   lat: number;

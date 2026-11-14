@@ -48,3 +48,51 @@ test('map coverage requires distinct and exact approved place names', async () =
   assert.equal(countMapReadyStops([{ title: 'Quán ăn bình dân Mộc Châu' }], mapped), 0);
   assert.equal(countMapReadyStops([{ title: 'Cầu kính Bạch Long giả' }], mapped), 0);
 });
+
+test('stable place IDs are province-scoped and map names do not become authority', async () => {
+  const { stablePlaceId, matchKnownMapPlaceById } =
+    await import('../.api-test-dist/api/_lib/itinerary-map-priority.js');
+  const id = stablePlaceId('Son La', 'Thác Dải Yếm');
+  assert.match(id, /^p_[0-9a-f]{20}$/);
+  assert.equal(id, stablePlaceId('Son La', 'thac dai yem'));
+  assert.notEqual(id, stablePlaceId('Ha Noi', 'Thác Dải Yếm'));
+  const eligible = [{ id, name: 'Thác Dải Yếm', latitude: 20.81, longitude: 104.59, source: 'reviewed_reference' }];
+  assert.equal(matchKnownMapPlaceById(id, eligible)?.name, 'Thác Dải Yếm');
+  assert.equal(matchKnownMapPlaceById(stablePlaceId('Ha Noi', 'Thác Dải Yếm'), eligible), null);
+});
+
+test('grounded AI rejects hallucinated or duplicate IDs and replaces invented labels', async () => {
+  const { normalizeGroundedItinerary } =
+    await import('../.api-test-dist/api/_lib/grounded-itinerary.js');
+  const { stablePlaceId } =
+    await import('../.api-test-dist/api/_lib/itinerary-map-priority.js');
+  const { parseRequest } = await import('../.api-test-dist/src/utils/itinerary.js');
+  const request = parseRequest({
+    provinceId: 'Son La', days: 1, partySize: 2, totalBudgetVnd: 1500000, style: 'nature',
+    includeArrivalTransport: false, preferences: { notes: '' },
+  });
+  const id1 = stablePlaceId('Son La', 'Thác Dải Yếm');
+  const id2 = stablePlaceId('Son La', 'Cầu kính Bạch Long');
+  const places = [
+    { id: id1, name: 'Thác Dải Yếm', latitude: 20.81, longitude: 104.59, source: 'reviewed_reference' },
+    { id: id2, name: 'Cầu kính Bạch Long', latitude: 20.85, longitude: 104.57, source: 'reviewed_reference' },
+  ];
+  const stop = (id, placeId) => ({
+    id, placeId, period: 'morning', startTime: '08:00', title: 'Quán ăn bình dân Mộc Châu',
+    description: 'Tham quan và thưởng thức đặc sản gần đó', estimatedCostVnd: 50000,
+    category: 'food', source: 'catalog', latitude: 0, longitude: 0,
+  });
+  const raw = { title: 'Mộc Châu', schedule: [{ day: 1, stops: [stop('d1s1', id1), stop('d1s2', id2)] }] };
+  const plan = normalizeGroundedItinerary(raw, request, places);
+  assert.ok(plan);
+  assert.deepEqual(plan.schedule[0].stops.map(x => x.title), ['Thác Dải Yếm', 'Cầu kính Bạch Long']);
+  assert.deepEqual(plan.schedule[0].stops.map(x => x.placeId), [id1, id2]);
+  assert.equal(plan.schedule[0].stops[0].category, 'activities');
+  assert.equal(plan.schedule[0].stops[0].latitude, undefined);
+  assert.equal(normalizeGroundedItinerary({
+    ...raw, schedule: [{ day: 1, stops: [stop('d1s1', id1), stop('d1s2', id1)] }],
+  }, request, places), null);
+  assert.equal(normalizeGroundedItinerary({
+    ...raw, schedule: [{ day: 1, stops: [stop('d1s1', stablePlaceId('Ha Noi', 'Thác Dải Yếm'))] }],
+  }, request, places), null);
+});

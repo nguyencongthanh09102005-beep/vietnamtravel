@@ -219,7 +219,7 @@ async function reviewPhoto(body:Body,actor:string) {
   }
   const core=await dbOne('SELECT candidate_id FROM travel_core_candidates WHERE candidate_id=?',[cid]);
   if(core){
-    const result=await reviewPhotoImage(id,decision);
+    const result=await reviewPhotoImage(id,decision as 'approve'|'reject');
     if(!result.ok)return json({error:result.reason},409);
     await audit(actor,'core_photo_'+decision,cid,id);
     return json({ok:true,status:result.reason});

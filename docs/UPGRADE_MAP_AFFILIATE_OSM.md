@@ -45,3 +45,9 @@ The province detail panel now has a fifth **Dịch vụ** tab after Tổng quan,
 - **Trải nghiệm:** Klook opens a verified Hanoi destination page for Hà Nội, or the general Klook portal for other provinces until verified deep links are added.
 - **Hoàng Sa/Trường Sa:** Unsupported commercial ticket and hotel booking cards are hidden.
 - Booking availability, fares and actual affiliate commission have not been verified.
+
+## Klook Hanoi affiliate link (2026-11-14)
+
+The owner generated a Klook affiliate destination link for Hà Nội through the official affiliate dashboard. The public tracking link is stored only in the Hanoi mapping in `src/utils/travel-affiliate.ts`, not globally, so other provinces do not inadvertently land on a Hanoi page.
+
+The link contains public `aid` and `aff_adid` parameters and an encoded `k_site` destination. No credentials are stored. Other regions continue using the existing Klook fallback or an approved generic partner override. Commission and click attribution must be verified later in the owner's affiliate dashboard.

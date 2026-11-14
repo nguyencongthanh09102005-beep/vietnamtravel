@@ -41,3 +41,26 @@ test('province-specific service links and labels are honest about destination',(
   assert.equal(canOfferTravelServices('Hoang Sa'),false);
   assert.equal(canOfferTravelServices('Truong Sa'),false);
 });
+
+test('official Klook Hanoi affiliate redirect applies only to Hanoi',()=>{
+  const hanoi=travelServiceLinks('TP. Hà Nội').find(x=>x.id==='klook');
+  const other=travelServiceLinks('TP. Đà Nẵng').find(x=>x.id==='klook');
+  assert.equal(hanoi.partnerConfigured,true);
+  assert.equal(hanoi.destinationPrefilled,true);
+  const url=new URL(hanoi.url);
+  assert.equal(url.hostname,'affiliate.klook.com');
+  assert.equal(url.pathname,'/redirect');
+  assert.equal(url.searchParams.get('aid'),'143338');
+  assert.equal(url.searchParams.get('aff_adid'),'1566723');
+  assert.equal(new URL(url.searchParams.get('k_site')).pathname,'/vi/destination/c34-hanoi/');
+  assert.equal(other.partnerConfigured,false);
+  assert.ok(!other.url.includes('c34-hanoi'));
+});
+
+test('specific Hanoi link takes priority over a generic Klook affiliate URL',()=>{
+  const overrides={klook:'https://affiliate.klook.com/redirect?aid=example&k_site=https%3A%2F%2Fwww.klook.com%2F'};
+  const hanoi=travelServiceLinks('Hà Nội',overrides).find(x=>x.id==='klook');
+  const cantho=travelServiceLinks('Cần Thơ',overrides).find(x=>x.id==='klook');
+  assert.equal(new URL(hanoi.url).searchParams.get('aid'),'143338');
+  assert.equal(new URL(cantho.url).searchParams.get('aid'),'example');
+});

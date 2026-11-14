@@ -13,6 +13,12 @@ export interface TravelServiceLink {
 }
 export type TravelPartnerOverrides = Partial<Record<TravelServiceId, string | undefined>>;
 
+// Public affiliate redirect created in the owner's Klook dashboard for Hà Nội.
+// Do not reuse for other destinations: k_site is fixed to Hanoi.
+const KLOOK_DESTINATION_AFFILIATE: Record<string, string> = {
+  'Hà Nội': 'https://affiliate.klook.com/redirect?aid=143338&aff_adid=1566723&k_site=https%3A%2F%2Fwww.klook.com%2Fvi%2Fdestination%2Fc34-hanoi%2F',
+};
+
 export function travelDestinationLabel(provinceName: string): string {
   return (provinceName.replace(/^(?:Tỉnh|TP\.)\s*/iu, '').trim().slice(0, 120) || 'Việt Nam');
 }
@@ -67,12 +73,17 @@ export function travelServiceLinks(provinceName: string, overrides: TravelPartne
   ];
   return defaults.map(({ defaultUrl, defaultPrefilled, ...item }) => {
     const template = overrides[item.id];
-    const partnerUrl = configuredUrl(template, destination);
+    const destinationAffiliate = item.id === 'klook'
+      ? configuredUrl(KLOOK_DESTINATION_AFFILIATE[destination], destination)
+      : null;
+    const partnerUrl = destinationAffiliate ?? configuredUrl(template, destination);
     return {
       ...item,
       url: partnerUrl ?? defaultUrl,
       partnerConfigured: Boolean(partnerUrl),
-      destinationPrefilled: partnerUrl ? Boolean(template?.includes('{destination}')) : defaultPrefilled,
+      destinationPrefilled: destinationAffiliate
+        ? true
+        : partnerUrl ? Boolean(template?.includes('{destination}')) : defaultPrefilled,
     };
   });
 }

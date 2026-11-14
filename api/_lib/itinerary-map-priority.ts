@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 import { HISTORICAL_PROVINCE_ALIASES } from '../../src/data/historicalProvinceAliases.js';
+import { REVIEWED_MAP_LANDMARKS } from '../../src/data/verifiedMapLandmarks.js';
 import { isSpecificMapStop } from '../../src/utils/itinerary-map.js';
 import { dbQuery } from './database.js';
 
@@ -36,7 +37,8 @@ export interface PriorityMapPlace {
   name: string;
   latitude: number;
   longitude: number;
-  source: 'osm_published' | 'geocode_cache';
+  source: 'osm_published' | 'geocode_cache' | 'reviewed_reference';
+  sourceUrl?: string;
 }
 
 function validCoordinates(latitude: number, longitude: number): boolean {
@@ -73,6 +75,11 @@ export async function getPriorityMapPlaces(provinceId: ProvinceId): Promise<Prio
       add({ name: catalogNames[index], latitude: Number(row.lat),
         longitude: Number(row.lon), source: 'geocode_cache' });
     }
+  }
+  // These 2026 public reference coordinates are distinct named landmarks,
+  // not arbitrary center points for a city or province.
+  for (const place of REVIEWED_MAP_LANDMARKS[provinceId] ?? []) {
+    add({ ...place, source: 'reviewed_reference' });
   }
   const published = await dbQuery(
     'SELECT g.name, g.latitude, g.longitude FROM travel_external_geodata g ' +

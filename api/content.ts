@@ -47,15 +47,16 @@ export function mergeVerifiedContent(
   provinceId: ProvinceId,
   entries: Array<Record<string, unknown>>,
   quarantined: ReadonlySet<string> = new Set(),
+  canonical = false,
 ): ProvinceDetailsCatalogItem {
   const base = provinceDetailsCatalog[provinceId];
   // A fresh copy avoids mutating the data authored by the original developer.
   const result: ProvinceDetailsCatalogItem = structuredClone(base);
   // Mask archived items in the original TypeScript catalog too.
   const original = legacyRows.filter(row=>row.provinceId===provinceId);
-  result.data.places = result.data.places.filter((_v,index)=>
+  result.data.places = (canonical ? [] : result.data.places).filter((_v,index)=>
     !original.some(row=>row.section==='places'&&row.position===index&&quarantined.has(row.id)));
-  result.data.cuisine = result.data.cuisine.filter((_v,index)=>
+  result.data.cuisine = (canonical ? [] : result.data.cuisine).filter((_v,index)=>
     !original.some(row=>row.section==='cuisine'&&row.position===index&&quarantined.has(row.id)));
   const places = new Set(result.data.places.map(x=>normalizedSubjectKey(x.name,provinceId)));
   const cuisine = new Set(result.data.cuisine.map(x=>normalizedSubjectKey(x.name,provinceId)));
@@ -155,7 +156,8 @@ export default {
             catch { return false; } })()));
       const removed = await dbQuery('SELECT content_id FROM travel_content_quarantine WHERE province_id=?',[provinceId]);
       const data = mergeVerifiedContent(provinceId as ProvinceId, trustedRows,
-        new Set(removed.rows.map(row=>String(row.content_id))));
+        new Set(removed.rows.map(row=>String(row.content_id))),
+        process.env.CONTENT_DB_CANONICAL==='1');
       const response = json({ provinceId, data, source: trustedRows.length ? 'approved_database' : 'legacy_fallback' });
       response.headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       return response;

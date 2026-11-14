@@ -3,6 +3,7 @@ import { dbOne, dbQuery, getRequestAuthSession, json, withinRateLimit } from './
 import { archiveLegacyCatalog } from '../src/utils/contentArchive.js';
 import { provincesData, type ProvinceId } from '../src/data/provincesData.js';
 import { normalizedSubjectKey } from '../src/utils/contentQuality.js';
+import { reviewPhotoImage } from './_lib/photo-review.js';
 
 type Section = 'places' | 'cuisine';
 type Body = Record<string,unknown>;
@@ -126,8 +127,10 @@ async function editOrCreate(body:Body,actor:string) {
   if(mode==='edit') {
     const existing=await approvedContent(id);
     const original=legacy.get(id);
-    if(!existing&&!original)return json({error:'Không tìm thấy mục cần sửa'},404);
+    const pending=await dbOne("SELECT province_id,section FROM travel_content_versions WHERE content_id=? AND reviewed_status='pending' ORDER BY created_at DESC LIMIT 1",[id]);
+    if(!existing&&!original&&!pending)return json({error:'Không tìm thấy mục cần sửa'},404);
     if((existing && (existing.province_id!==info.provinceId || existing.section!==info.section)) ||
+       (pending && (pending.province_id!==info.provinceId || pending.section!==info.section)) ||
        (original && (original.provinceId!==info.provinceId || original.section!==info.section)))
       return json({error:'Không được chuyển mục đã có sang tỉnh hoặc loại khác'},409);
     const archived=await dbOne('SELECT content_id FROM travel_content_quarantine WHERE content_id=?',[id]);
@@ -143,6 +146,7 @@ async function editOrCreate(body:Body,actor:string) {
   const now=new Date().toISOString();
   await dbQuery("INSERT INTO travel_content_versions(version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,checked_at,created_at) VALUES (?,?,?,?,?,'ai_draft',?,'pending',?,?)",
     [versionId,id,info.provinceId,info.section,JSON.stringify(next),info.refs[0],now,now]);
+  if(mode==='edit') await dbQuery("UPDATE travel_content_versions SET reviewed_status='rejected' WHERE content_id=? AND version_id<>? AND reviewed_status='pending'",[id,versionId]);
   await audit(actor,mode,id,versionId);
   return json({ok:true,versionId,contentId:id,status:'pending'});
 }
@@ -212,6 +216,13 @@ async function reviewPhoto(body:Body,actor:string) {
     await dbQuery("UPDATE travel_image_candidates SET state='rejected' WHERE image_id=? AND state='pending'",[id]);
     await audit(actor,'photo_reject',cid,id);
     return json({ok:true,status:'rejected'});
+  }
+  const core=await dbOne('SELECT candidate_id FROM travel_core_candidates WHERE candidate_id=?',[cid]);
+  if(core){
+    const result=await reviewPhotoImage(id,decision);
+    if(!result.ok)return json({error:result.reason},409);
+    await audit(actor,'core_photo_'+decision,cid,id);
+    return json({ok:true,status:result.reason});
   }
   const archived=await dbOne('SELECT content_id FROM travel_content_quarantine WHERE content_id=?',[cid]);
   if(archived)return json({error:'Mục đang bị gỡ'},409);

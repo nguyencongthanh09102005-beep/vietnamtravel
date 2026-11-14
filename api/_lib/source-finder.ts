@@ -1,5 +1,6 @@
 import { dbQuery } from './database.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
+import { HISTORICAL_PROVINCE_ALIASES } from '../../src/data/historicalProvinceAliases.js';
 
 export type SourceSuggestion={url:string;title:string;snippet:string;host:string;provider:'brave'|'saved_news';status:'suggested'};
 type Dict=Record<string,unknown>;
@@ -15,7 +16,7 @@ function safeUrl(input:string):{url:string;host:string}|null{
 export function sourceGroup(host:string){
   return /(^|\.)(wikipedia|wikidata|wikimedia|wikivoyage)\.org$/.test(host)?'wikimedia-group':host;
 }
-export function rankSourceCandidates(rows:SourceSuggestion[],name:string,provinceName:string):SourceSuggestion[]{
+export function rankSourceCandidates(rows:SourceSuggestion[],name:string,provinceName:string,olderNames:string[]=[]):SourceSuggestion[]{
   const subject=normalize(name),location=normalize(provinceName.replace(/^(Tỉnh|TP\.|Thành phố)\s+/i,''));
   const seen=new Set<string>();
   return rows.filter(row=>{
@@ -24,7 +25,7 @@ export function rankSourceCandidates(rows:SourceSuggestion[],name:string,provinc
     if(subject.length<3||!evidence.includes(subject))return false;
     // Regional name must be present in the search evidence; this is only
     // a lead, not proof of a dish's place of origin.
-    if(location.length>3&&!evidence.includes(location))return false;
+    if(location.length>3&&![location,...olderNames.map(normalize)].some(x=>x.length>3&&evidence.includes(x)))return false;
     seen.add(url.url);return true;
   }).slice(0,8);
 }
@@ -47,7 +48,7 @@ export async function findSourceCandidates(args:{
   if(key){
     try{
       const url=new URL('https://api.search.brave.com/res/v1/web/search');
-      url.search=new URLSearchParams({q:'"'+cleanName.replace(/"/g,'')+'" "'+province+'" du lịch ẩm thực',country:'VN',search_lang:'vi',count:'15',text_decorations:'false',result_filter:'web'}).toString();
+      url.search=new URLSearchParams({q:'"'+cleanName.replace(/"/g,'')+'" '+province.replace(/^(Tỉnh|TP\.|Thành phố)\s+/i,'')+' du lịch ẩm thực',country:'VN',search_lang:'vi',count:'15',text_decorations:'false',result_filter:'web'}).toString();
       const response=await (args.fetcher??fetch)(url.toString(),{
         headers:{Accept:'application/json','X-Subscription-Token':key},
         redirect:'error',signal:AbortSignal.timeout(9000),
@@ -63,7 +64,8 @@ export async function findSourceCandidates(args:{
       }
     }catch(error){errors.push(String(error).slice(0,180));}
   }else errors.push('BRAVE_SEARCH_API_KEY_NOT_CONFIGURED: chỉ tìm trong nguồn RSS đã lưu');
-  return {suggestions:rankSourceCandidates(result,cleanName,province),providerConfigured:Boolean(key),errors};
+  const oldNames=Object.entries(HISTORICAL_PROVINCE_ALIASES).filter(([,id])=>id===args.provinceId).map(([name])=>name);
+  return {suggestions:rankSourceCandidates(result,cleanName,province,oldNames),providerConfigured:Boolean(key),errors};
 }
 export async function saveSourceSuggestions(contentId:string,provinceId:string,section:string,items:SourceSuggestion[]){
   let added=0;

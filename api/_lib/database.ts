@@ -216,7 +216,7 @@ const schema = [
   )`,
   `CREATE TABLE IF NOT EXISTS travel_admin_jobs (
     job_id TEXT PRIMARY KEY, province_id TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK(kind IN ('photos','sources')),
+    kind TEXT NOT NULL CHECK(kind IN ('photos','sources','source-bulk')),
     state TEXT NOT NULL DEFAULT 'queued' CHECK(state IN ('queued','running','completed','failed')),
     attempts INTEGER NOT NULL DEFAULT 0, requested_by TEXT NOT NULL,
     result_json TEXT NOT NULL DEFAULT '{}', error TEXT NOT NULL DEFAULT '',

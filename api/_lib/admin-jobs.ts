@@ -2,6 +2,7 @@ import { dbOne, dbQuery } from './database.js';
 import { enrichSection } from './auto-enrich.js';
 import { enqueueImagesForReview } from './photo-queue.js';
 import type { ProvinceId } from '../../src/data/provincesData.js';
+import { findSourceCandidates,saveSourceSuggestions } from './source-finder.js';
 
 /** Process one bounded unit of work. No browser request waits for scraping. */
 export async function processNextAdminJob() {
@@ -18,6 +19,30 @@ export async function processNextAdminJob() {
   let checkpoint:{stage?:string;offset?:number;checked?:number;added?:number;missing?:number}={};
   try { checkpoint=JSON.parse(String(row.result_json??'{}')); }catch {checkpoint={};}
   try {
+    if(kind==='source-bulk') {
+      const parsed=JSON.parse(String(row.result_json??'{}')) as {
+        targets?:Array<{id:string;provinceId:ProvinceId;section:'places'|'cuisine';name:string}>;
+        cursor?:number;found?:number;empty?:number;total?:number;
+      };
+      const targets=Array.isArray(parsed.targets)?parsed.targets:[];
+      const cursor=Math.max(0,Math.floor(parsed.cursor??0));
+      if(cursor>=targets.length) {
+        await dbQuery("UPDATE travel_admin_jobs SET state='completed',finished_at=? WHERE job_id=?",
+          [new Date().toISOString(),jobId]);
+        return {jobId,state:'completed',total:targets.length,found:parsed.found??0};
+      }
+      const target=targets[cursor];
+      const result=await findSourceCandidates({name:target.name,provinceId:target.provinceId,section:target.section});
+      const fatal=result.errors.find(x=>x.startsWith('BRAVE_HTTP_429')||x.includes('TimeoutError'));
+      if(fatal)throw Error(fatal);
+      const found=await saveSourceSuggestions(target.id,target.provinceId,target.section,result.suggestions);
+      const updated={...parsed,cursor:cursor+1,found:(parsed.found??0)+found,
+        empty:(parsed.empty??0)+(result.suggestions.length===0?1:0)};
+      const done=updated.cursor>=targets.length;
+      await dbQuery('UPDATE travel_admin_jobs SET state=?,result_json=?,finished_at=? WHERE job_id=?',
+        [done?'completed':'queued',JSON.stringify(updated),done?new Date().toISOString():null,jobId]);
+      return {jobId,state:done?'completed':'queued',cursor:updated.cursor,total:targets.length,found:updated.found};
+    }
     if(kind==='photos') {
       const provider=checkpoint.stage==='openverse'?'openverse':'commons';
       const key=process.env.FLICKR_API_COMMERCIAL_APPROVED==='1'?process.env.FLICKR_API_KEY:undefined;

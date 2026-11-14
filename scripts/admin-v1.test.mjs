@@ -78,6 +78,9 @@ test('edit creates a new version; older publication remains until manual approva
     detail:'Nội dung chi tiết được kiểm tra trước khi xuất bản.',sourceUrls});
   assert.equal(edited.status,200,JSON.stringify(edited.data));
   editVersion=edited.data.versionId;
+  const versionsResponse=await admin.fetch(request('versions&contentId='+encodeURIComponent(itemId)));
+  assert.equal(versionsResponse.status,200);
+  assert.ok((await versionsResponse.json()).versions.length>=2);
   assert.ok(!(await publicRead()).some(x=>x.description.includes('đã chỉnh sửa')));
   const accepted=await submit({action:'moderate',decision:'approve',versionId:editVersion});
   assert.equal(accepted.status,200);

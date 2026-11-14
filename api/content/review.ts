@@ -39,7 +39,7 @@ export default {
       if (!/^[a-zA-Z0-9_-]{8,100}$/.test(versionId) || !['approve','reject','restore'].includes(String(action)))
         return json({ error: 'Invalid review request' },400);
       const item = await dbOne(
-        'SELECT version_id,content_id,province_id,section,reviewed_status,source_ref FROM travel_content_versions WHERE version_id=?',
+        'SELECT version_id,content_id,province_id,section,reviewed_status,source_ref,payload_json FROM travel_content_versions WHERE version_id=?',
         [versionId]);
       if (!item || !Object.prototype.hasOwnProperty.call(provincesData,String(item.province_id)))
         return json({ error: 'Version not found' },404);
@@ -48,6 +48,29 @@ export default {
         await dbQuery('UPDATE travel_content_versions SET reviewed_status=? WHERE version_id=? AND reviewed_status=?',
           ['rejected',versionId,'pending']);
         return json({ ok:true, status:'rejected', versionId });
+      }
+      // All publication paths share the same source and media safety gate.
+      if (action === 'approve' || action === 'restore') {
+        const quarantined = await dbOne('SELECT content_id FROM travel_content_quarantine WHERE content_id=?',[String(item.content_id)]);
+        if (quarantined) return json({error:'Content archived; restore it first'},409);
+        if (['places','cuisine'].includes(String(item.section))) {
+          const payload=JSON.parse(String(item.payload_json)) as Record<string,unknown>;
+          const urls=Array.isArray(payload.sourceUrls)?payload.sourceUrls.filter(v=>typeof v==='string'&&v.startsWith('https://')) as string[]:[];
+          const hosts=new Set<string>();
+          for(const url of urls){
+            try { const parsed=new URL(url);if(parsed.protocol!=='https:'||parsed.username||parsed.password)continue;
+              const host=parsed.hostname.replace(/^(www|m)\./,'').toLowerCase();
+              hosts.add(/(^|\.)(wikipedia|wikidata|wikimedia)\.org$/.test(host)?'wikimedia-group':host);
+            } catch { /* ignore bad source */ }
+          }
+          if(hosts.size<2)return json({error:'Two independent editorial sources required'},409);
+          const image=typeof payload.image==='string'?payload.image:'';
+          if(image) {
+            const license=String(payload.imageLicense??'');
+            if(!/^(CC0(?: 1\.0)?|CC BY(?: [234]\.0)?|CC BY-SA(?: [234]\.0)?|PUBLIC DOMAIN)$/i.test(license) ||
+              !payload.imageCreditUrl || !payload.imageAttribution) return json({error:'Unverified image rights'},409);
+          }
+        }
       }
       // Approval/restore requires an actual source URL. A human must inspect
       // historical accuracy, location and image license before calling this.

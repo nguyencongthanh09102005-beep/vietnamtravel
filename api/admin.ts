@@ -302,6 +302,16 @@ export default {
           if(provinceId&&!validProvince(provinceId))return json({error:'Tỉnh không hợp lệ'},400);
           return json({items:await listItems(provinceId)});
         }
+        if(view==='versions'){
+          const id=u.searchParams.get('contentId')??'';
+          if(!validId(id))return json({error:'ID nội dung không hợp lệ'},400);
+          const rows=await dbQuery('SELECT version_id,payload_json,reviewed_status,source_ref,source_kind,created_at FROM travel_content_versions WHERE content_id=? ORDER BY created_at DESC LIMIT 60',[id]);
+          return json({versions:rows.rows.map(row=>({versionId:String(row.version_id),
+            description:text(bodyObject(JSON.parse(String(row.payload_json))).description,850),
+            reviewedStatus:String(row.reviewed_status),sourceKind:String(row.source_kind),
+            sourceUrls:sources(bodyObject(JSON.parse(String(row.payload_json))).sourceUrls),
+            sourceRef:String(row.source_ref??''),createdAt:String(row.created_at)}))});
+        }
         if(view==='queue')return json(await reviewQueue());
         if(view==='jobs')return json({jobs:(await dbQuery('SELECT * FROM travel_admin_jobs ORDER BY created_at DESC LIMIT 60')).rows});
         if(view==='history')return json({history:(await dbQuery('SELECT * FROM travel_admin_audit ORDER BY created_at DESC LIMIT 60')).rows});

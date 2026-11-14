@@ -18,6 +18,8 @@ type QueueVersion={versionId:string;contentId:string;provinceId:string;section:S
 type QueuePhoto={imageId:string;contentId:string;provinceId:string;section:Section;
   subjectName:string;imageUrl:string;sourceUrl:string;sourceKind:string;
   license:string;attribution:string;width:number;height:number};
+type ItemVersion={versionId:string;description:string;reviewedStatus:string;sourceKind:string;
+  sourceUrls:string[];sourceRef:string;createdAt:string};
 type AdminJob={job_id:string;province_id:string;kind:string;state:string;
   result_json:string;error:string;created_at:string};
 type FormState={mode:'create'|'edit'|'archive';id:string;provinceId:string;section:Section;
@@ -78,6 +80,9 @@ export function AdminDashboard() {
   const [jobs,setJobs]=useState<AdminJob[]>([]);
   const [history,setHistory]=useState<Array<{audit_id:string;action:string;created_at:string;reason:string;content_id:string}>>([]);
   const [draft,setDraft]=useState<FormState|null>(null);
+  const [historyItem,setHistoryItem]=useState<Item|null>(null);
+  const [itemVersions,setItemVersions]=useState<ItemVersion[]>([]);
+  const [historyLoading,setHistoryLoading]=useState(false);
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(true);
   const [fatal,setFatal]=useState('');
@@ -122,6 +127,14 @@ export function AdminDashboard() {
     for(const photo of photos)groups.set(photo.contentId,[...(groups.get(photo.contentId)??[]),photo]);
     return [...groups.entries()];
   },[photos]);
+  const openHistory=async(item:Item)=>{
+    setDraft(null);setHistoryItem(item);setItemVersions([]);setHistoryLoading(true);
+    try {
+      const result=await apiGet<{versions:ItemVersion[]}>('versions','&contentId='+encodeURIComponent(item.id));
+      setItemVersions(result.versions);
+    }catch(error){setMessage(error instanceof Error?error.message:String(error));}
+    finally{setHistoryLoading(false);}
+  };
   const openEdit=(item:Item)=>{
     setDraft({mode:'edit',id:item.id,provinceId:item.provinceId,section:item.section,
       name:item.name,description:item.description,detail:item.detail,
@@ -244,6 +257,9 @@ export function AdminDashboard() {
               <span className={'mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium '+badge(item.status)}>{label(item.status)}</span>
             </div>
             <div className="flex items-center gap-1">
+              <button type="button" title="Xem lịch sử phiên bản" aria-label={'Lịch sử '+item.name}
+                onClick={()=>void openHistory(item)}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><MoreHorizontal className="h-4 w-4"/></button>
               <button type="button" title="Sửa nội dung" aria-label={'Sửa '+item.name} onClick={()=>openEdit(item)}
                 className="rounded-lg p-2 text-slate-500 hover:bg-emerald-50 hover:text-emerald-800"><Pencil className="h-4 w-4"/></button>
               {item.status==='published'?
@@ -374,6 +390,30 @@ export function AdminDashboard() {
       </section>}
     </div>
 
+    {historyItem&&<div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" role="presentation" onClick={()=>setHistoryItem(null)}>
+      <section role="dialog" aria-modal="true" aria-label="Lịch sử phiên bản" onClick={e=>e.stopPropagation()}
+        className="h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-2xl sm:p-7">
+        <div className="mb-5 flex items-center justify-between gap-2"><div>
+          <h2 className="text-lg font-bold">Lịch sử phiên bản</h2>
+          <p className="mt-1 text-sm text-slate-500">{historyItem.name}</p></div>
+          <button type="button" onClick={()=>setHistoryItem(null)} aria-label="Đóng lịch sử" className="rounded-lg p-2 hover:bg-slate-100"><X className="h-5 w-5"/></button>
+        </div>
+        <p className="mb-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">Mỗi bản sửa được lưu riêng. Chỉ có thể khôi phục bản đã duyệt và còn đủ hai nguồn độc lập. Mục đang gỡ phải khôi phục hiển thị trước.</p>
+        {historyLoading&&<p className="text-sm text-slate-500">Đang tải lịch sử...</p>}
+        {!historyLoading&&!itemVersions.length&&<p className="py-4 text-sm text-slate-500">Mục gốc chưa có phiên bản trong database. Dữ liệu vẫn nằm trong catalog dự phòng.</p>}
+        <div className="space-y-3">{itemVersions.map(v=><article key={v.versionId} className="rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between gap-2"><span className={'rounded-full px-2 py-1 text-xs '+(v.reviewedStatus==='approved'?'bg-emerald-50 text-emerald-800':'bg-amber-50 text-amber-800')}>
+            {v.reviewedStatus==='approved'?'Đã duyệt':v.reviewedStatus==='rejected'?'Đã từ chối':'Chờ duyệt'}</span>
+            <time className="text-xs text-slate-400">{new Date(v.createdAt).toLocaleString('vi-VN')}</time></div>
+          <p className="mt-3 text-sm leading-6 text-slate-600">{v.description||'Không có mô tả'}</p>
+          <p className="mt-2 text-xs text-slate-500">{v.sourceUrls.length} nguồn ghi trong phiên bản</p>
+          {v.reviewedStatus==='approved'&&v.versionId!==historyItem.versionId&&
+            <button type="button" disabled={busy||v.sourceUrls.length<2||historyItem.status==='archived'}
+              onClick={()=>void mutate({action:'moderate',decision:'restore-version',versionId:v.versionId},'Đã khôi phục phiên bản đã duyệt.')}
+              className="mt-3 rounded-xl border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-800 disabled:opacity-40">Khôi phục phiên bản này</button>}
+        </article>)}</div>
+      </section>
+    </div>}
     {draft&&<div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" role="presentation" onClick={()=>!busy&&setDraft(null)}>
       <section role="dialog" aria-modal="true" aria-label={draft.mode==='archive'?'Gỡ nội dung':'Chỉnh sửa nội dung'}
         onClick={event=>event.stopPropagation()} className="flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white p-5 shadow-2xl sm:p-7">

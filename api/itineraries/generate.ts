@@ -2,6 +2,7 @@ import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
 import { parseRequest, validateStoredPlan, recalculatePlan } from '../../src/utils/itinerary.js';
 import { generateGeminiText } from '../_lib/gemini.js';
 import { getPriorityMapPlaces } from '../_lib/itinerary-map-priority.js';
+import { bootstrapWikipediaMapPlaces } from '../_lib/wikipedia-geo.js';
 import { normalizeGroundedItinerary } from '../_lib/grounded-itinerary.js';
 import { databaseConfigured, withinRateLimit } from '../_lib/auth.js';
 
@@ -46,14 +47,23 @@ export default {
     }
 
     const province = provinceDetailsCatalog[trip.provinceId];
-    const mappedPlaces = await getPriorityMapPlaces(trip.provinceId).catch(error => {
+    let mappedPlaces = await getPriorityMapPlaces(trip.provinceId).catch(error => {
       console.warn('[planner] map catalog unavailable', String(error).slice(0, 120));
       return [];
     });
+    // Avoid rejecting a province just because it has no hand-seeded pins yet:
+    // enrich only its known editorial landmarks with precisely matched,
+    // province-checked Wikipedia coordinates on this user-triggered request.
+    // The background cache is persistent across subsequent planner/map calls.
+    if (mappedPlaces.length < 2) {
+      await bootstrapWikipediaMapPlaces(trip.provinceId).catch(error =>
+        console.warn('[planner] province map bootstrap unavailable', String(error).slice(0, 150)));
+      mappedPlaces = await getPriorityMapPlaces(trip.provinceId).catch(() => mappedPlaces);
+    }
     // Never produce a plan whose stops cannot be pinned. Unsupported provinces
     // need more verified places, not fake restaurant names or GPS coordinates.
     if (!mappedPlaces.length) {
-      return json({ error: 'Tỉnh này chưa có đủ địa điểm với tọa độ đã kiểm tra để lập lịch trình trên bản đồ. Vui lòng thử tỉnh khác hoặc bổ sung dữ liệu địa điểm.' }, 422);
+      return json({ error: 'Chưa tìm thấy địa điểm có tọa độ được đối chiếu cho tỉnh này. Hệ thống đã thử tìm trong danh mục và nguồn mở nhưng chưa đủ dữ liệu; không thể tự bịa vị trí. Bạn có thể thử lại khi nguồn dữ liệu được bổ sung.' }, 422);
     }
     const foodNotes = province.data.cuisine.slice(0, 8)
       .map(item => item.name + ': ' + item.description.slice(0, 95));

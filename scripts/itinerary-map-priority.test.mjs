@@ -143,3 +143,42 @@ test('Mộc Châu end-to-end grounding contract yields only true map pins even i
     id: 'invalid', placeId: stablePlaceId('Ha Noi', 'Thác Dải Yếm'),
   }, places), null);
 });
+
+test('Wikipedia coordinate bootstrap only trusts exact, province-mentioned named articles', async () => {
+  const { extractWikipediaCoordinates, wikipediaEligibleNames } =
+    await import('../.api-test-dist/api/_lib/wikipedia-geo.js');
+  const names = wikipediaEligibleNames('Ho Chi Minh');
+  assert.ok(names.includes('Dinh Độc Lập'));
+  assert.ok(names.includes('Chợ Bến Thành'));
+  const payload = { query: { pages: [
+    { pageid: 123, ns: 0, title: 'Dinh Độc Lập', coordinates: [
+      { lat: 10.777108, lon: 106.695441, globe: 'earth' },
+    ], extract: 'Dinh Độc Lập là di tích lịch sử tại Thành phố Hồ Chí Minh, Việt Nam.' },
+    { pageid: 124, ns: 0, title: 'Chợ Bến Thành', coordinates: [
+      { lat: 10.77252, lon: 106.69802 },
+    ], extract: 'Chợ Bến Thành là một ngôi chợ lớn tại Hà Nội.' },
+    { pageid: 125, ns: 0, title: 'Landmark 81', coordinates: [
+      { lat: 10.795, lon: 106.722 },
+    ], extract: 'Landmark 81 là tòa nhà ở Thành phố Hồ Chí Minh.', pageprops: { disambiguation: '' } },
+  ] } };
+  const accepted = extractWikipediaCoordinates('Ho Chi Minh', names, payload);
+  assert.deepEqual(accepted.map(x => x.name), ['Dinh Độc Lập']);
+  assert.equal(accepted[0].latitude, 10.777108);
+  assert.match(accepted[0].sourceUrl, /^https:\/\/vi\.wikipedia\.org\/wiki\//);
+  assert.equal(extractWikipediaCoordinates('Ha Noi', ['Dinh Độc Lập'], payload).length, 0);
+});
+
+test('Wikipedia exact-title source can validate places in officially merged provinces', async () => {
+  const { extractWikipediaCoordinates } =
+    await import('../.api-test-dist/api/_lib/wikipedia-geo.js');
+  const pages = [{ pageid: 100, ns: 0, title: 'Một địa điểm cụ thể',
+    extract: 'Di tích nằm tại Quảng Nam, Việt Nam.',
+    coordinates: [{ lat: 15.8, lon: 108.1 }],
+  }];
+  assert.equal(extractWikipediaCoordinates('Da Nang', ['Một địa điểm cụ thể'],
+    { query: { pages } }).length, 1);
+  assert.equal(extractWikipediaCoordinates('Ha Noi', ['Một địa điểm cụ thể'],
+    { query: { pages } }).length, 0);
+  assert.equal(extractWikipediaCoordinates('Da Nang', ['Tên khác'],
+    { query: { pages } }).length, 0);
+});

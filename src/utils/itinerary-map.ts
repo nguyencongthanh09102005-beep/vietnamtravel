@@ -13,6 +13,10 @@ export function isSpecificMapStop(stop: MapStop): boolean {
   const title = stop.title.trim();
   if (title.length < 3 || stop.category === 'transport') return false;
   if (/^(hoạt động mới|ăn sáng|ăn trưa|ăn tối|ăn nhẹ|nghỉ ngơi|nhận phòng|trả phòng|di chuyển|về khách sạn|tham quan tự do)/iu.test(title)) return false;
+  // Regions, generic businesses and unspecific food stops are not map pins.
+  // A named attraction or named venue is still allowed.
+  if (/^(?:cao nguyên|khu vực|trung tâm|vùng núi|địa điểm du lịch|quán ăn bình dân|quán ăn ngon|nhà hàng bình dân|nhà hàng địa phương|quán đặc sản)(?:\s|$)/iu.test(title)) return false;
+  if (/^(?:nhà hàng hải sản|nhà hàng đặc sản|quán cà phê|quán ăn|nhà hàng)\s*$/iu.test(title)) return false;
   if (stop.category === 'food' &&
       !/(quán|nhà hàng|tiệm|chợ|phố|café|cafe|coffee|bà |ông |cô |chú |bé |hải sản|địa chỉ)/iu.test(title)) {
     return false;

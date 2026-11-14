@@ -97,7 +97,9 @@ function TilePinMap({
     return { tiles, markers, zoom };
   }, [points, size, pan, zoomAdjust]);
 
-  const selected = stops.find(s => s.id === activeStopId);
+  // Only a stop with a matching geocode can open a map pin popup.
+  // A selected but unlocated meal must not seem attached to another pin.
+  const selected = stops.find(s => s.id === activeStopId && points.some(p => p.id === s.id));
   const reset = () => { setZoomAdjust(0); setPan({ x: 0, y: 0 }); };
 
   const startPan = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -343,6 +345,11 @@ export function ItineraryDayMap({ provinceId, provinceName, stops, onEditStop }:
             </div>
           )}
           {error ? <p role="status" className="mt-2 text-xs text-amber-700">{error}</p> : null}
+          {selected && !locatedIds.has(selected.id) ? (
+            <p role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs leading-5 text-amber-800">
+              {selected.title} chưa có ghim xác minh. Hãy chọn một địa điểm cụ thể hoặc kiểm tra trên Google Maps.
+            </p>
+          ) : null}
           {notLocated.length ? (
             <p className="mt-2 text-[11px] leading-5 text-slate-500">
               Chưa ghim: {notLocated.slice(0, 3).map(stop => stop.title).join(', ')}

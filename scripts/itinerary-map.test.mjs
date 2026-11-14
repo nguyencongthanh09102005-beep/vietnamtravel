@@ -12,7 +12,11 @@ test('only specific destinations are eligible for map pins', () => {
   assert.equal(isSpecificMapStop(place('3', 'Mì Quảng', 'food')), false);
   assert.equal(isSpecificMapStop(place('4', 'Di chuyển về khách sạn', 'transport')), false);
   assert.equal(isSpecificMapStop(place('5', 'Quán Mì Quảng Bà Mua', 'food')), true);
-  assert.equal(isSpecificMapStop(place('6', 'Nhà hàng hải sản', 'food')), true);
+  assert.equal(isSpecificMapStop(place('6', 'Nhà hàng hải sản', 'food')), false);
+  assert.equal(isSpecificMapStop(place('7', 'Quán ăn bình dân Mộc Châu', 'food')), false);
+  assert.equal(isSpecificMapStop(place('8', 'Cao nguyên Mộc Châu')), false);
+  assert.equal(isSpecificMapStop(place('9', 'Cầu kính Bạch Long')), true);
+  assert.equal(isSpecificMapStop(place('10', 'Đồi Chè Trái Tim')), true);
 });
 
 test('Google Maps route links preserve order, province and omit generic food', () => {

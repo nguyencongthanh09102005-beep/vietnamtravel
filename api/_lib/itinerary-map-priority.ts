@@ -19,6 +19,11 @@ export function mapQueryKey(provinceId: ProvinceId, title: string): string {
   return createHash('sha256').update(provinceId + '\n' + normalizeMapName(title)).digest('hex');
 }
 
+/** Stable across deployments, regardless of the matching geocoding source. */
+export function stablePlaceId(provinceId: ProvinceId, title: string): string {
+  return 'p_' + mapQueryKey(provinceId, title).slice(0, 20);
+}
+
 /** Accept province names from either side of the official 2025 mergers. */
 export function matchesMapProvince(provinceId: ProvinceId, addressParts: string[]): boolean {
   const names = [
@@ -34,6 +39,8 @@ export function matchesMapProvince(provinceId: ProvinceId, addressParts: string[
 }
 
 export interface PriorityMapPlace {
+  /** Stable ID scoped to the selected province and normalized place name. */
+  id: string;
   name: string;
   latitude: number;
   longitude: number;
@@ -51,17 +58,18 @@ function validCoordinates(latitude: number, longitude: number): boolean {
 export async function getPriorityMapPlaces(provinceId: ProvinceId): Promise<PriorityMapPlace[]> {
   const results: PriorityMapPlace[] = [];
   const seen = new Set<string>();
-  const add = (place: PriorityMapPlace) => {
+  const add = (place: Omit<PriorityMapPlace, 'id'>) => {
     const key = normalizeMapName(place.name);
     if (!key || seen.has(key) || !isSpecificMapStop({
       id: 'candidate', title: place.name, category: 'activities',
     }) || !validCoordinates(place.latitude, place.longitude)) return;
     seen.add(key);
-    results.push(place);
+    results.push({ ...place, id: stablePlaceId(provinceId, place.name) });
   };
   const catalogNames = provinceDetailsCatalog[provinceId].data.places
     .map(place => place.name).filter(name => name.trim()).slice(0, 30);
-  if (catalogNames.length) {
+  try {
+    if (catalogNames.length) {
     const cacheKeys = catalogNames.map(name => mapQueryKey(provinceId, name));
     const placeholders = cacheKeys.map(() => '?').join(',');
     const cached = await dbQuery(
@@ -75,12 +83,16 @@ export async function getPriorityMapPlaces(provinceId: ProvinceId): Promise<Prio
       add({ name: catalogNames[index], latitude: Number(row.lat),
         longitude: Number(row.lon), source: 'geocode_cache' });
     }
+    }
+  } catch (error) {
+    console.warn('[map-catalog] cached geocodes unavailable', String(error).slice(0, 120));
   }
   // These 2026 public reference coordinates are distinct named landmarks,
   // not arbitrary center points for a city or province.
   for (const place of REVIEWED_MAP_LANDMARKS[provinceId] ?? []) {
     add({ ...place, source: 'reviewed_reference' });
   }
+  try {
   const published = await dbQuery(
     'SELECT g.name, g.latitude, g.longitude FROM travel_external_geodata g ' +
     'INNER JOIN travel_core_candidates c ON c.candidate_id = g.candidate_id ' +
@@ -90,6 +102,9 @@ export async function getPriorityMapPlaces(provinceId: ProvinceId): Promise<Prio
   for (const row of published.rows) {
     add({ name: String(row.name), latitude: Number(row.latitude),
       longitude: Number(row.longitude), source: 'osm_published' });
+  }
+  } catch (error) {
+    console.warn('[map-catalog] published OSM places unavailable', String(error).slice(0, 120));
   }
   return results.slice(0, 32);
 }
@@ -105,6 +120,12 @@ export function countMapReadyStops(
 ): number {
   const named = new Set(stops.map(stop => normalizeMapName(stop.title)));
   return places.filter(place => named.has(normalizeMapName(place.name))).length;
+}
+
+/** Accept only IDs from this province's vetted catalog; names from AI are untrusted. */
+export function matchKnownMapPlaceById(placeId: string, places: PriorityMapPlace[]): PriorityMapPlace | null {
+  if (!/^p_[0-9a-f]{20}$/.test(placeId)) return null;
+  return places.find(place => place.id === placeId) ?? null;
 }
 
 /**

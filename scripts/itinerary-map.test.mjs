@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-const { isSpecificMapStop, dayDirectionsLinks, mapSearchUrl } =
+const { isSpecificMapStop, dayDirectionsLinks, dayAirDistanceKm, mapSearchUrl } =
   await import('../.api-test-dist/src/utils/itinerary-map.js');
 
 const place = (id, title, category = 'activities') => ({ id, title, category });
@@ -46,4 +46,21 @@ test('long daily routes split into overlapping mobile-friendly legs', () => {
   ]);
   assert.equal(dayDirectionsLinks([place('1', 'Mì Quảng', 'food')], 'Đà Nẵng').length, 0);
   assert.ok(mapSearchUrl('Cầu Rồng', 'Đà Nẵng').startsWith('https://www.google.com/maps/search/'));
+});
+
+test('pins improve Google Maps route links and preserve stop order',()=>{
+  const stops=[place('a','Cầu Rồng'),place('b','Bà Nà Hills'),place('c','Bán đảo Sơn Trà')];
+  const pins=[{id:'a',lat:16.061,lon:108.227,label:'Cầu Rồng'},
+    {id:'b',lat:15.996,lon:107.989,label:'Bà Nà Hills'},
+    {id:'c',lat:16.102,lon:108.279,label:'Sơn Trà'}];
+  const exact=dayDirectionsLinks(stops,'Đà Nẵng',pins);
+  const params=new URL(exact[0].url).searchParams;
+  assert.equal(params.get('origin'),'16.061000,108.227000');
+  assert.equal(params.get('destination'),'16.102000,108.279000');
+  assert.equal(params.get('waypoints'),'15.996000,107.989000');
+  assert.deepEqual(exact[0].stopIds,['a','b','c']);
+  const partial=dayDirectionsLinks(stops,'Đà Nẵng',pins.slice(0,1));
+  assert.match(new URL(partial[0].url).searchParams.get('destination'),/Sơn Trà/);
+  assert.equal(dayAirDistanceKm(stops,pins.slice(0,2)),null);
+  assert.ok(dayAirDistanceKm(stops,pins)>0);
 });

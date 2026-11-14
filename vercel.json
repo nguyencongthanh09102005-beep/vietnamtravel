@@ -8,5 +8,8 @@
       "path": "/api/administration/check",
       "schedule": "0 3 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }

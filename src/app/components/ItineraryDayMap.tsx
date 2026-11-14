@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { ExternalLink, LocateFixed, MapPin, Minus, Plus, RefreshCw, Route } from 'lucide-react';
 import type { ItineraryStop } from '../../utils/itinerary';
 import {
-  dayDirectionsLinks, isSpecificMapStop, mapSearchUrl, type MappedStop,
+  dayAirDistanceKm, dayDirectionsLinks, isSpecificMapStop, mapSearchUrl, type MappedStop,
 } from '../../utils/itinerary-map';
 
 interface Props {
@@ -181,7 +181,8 @@ export function ItineraryDayMap({ provinceId, provinceName, stops }: Props) {
   const [retry, setRetry] = useState(0);
   const searchable = useMemo(() => stops.filter(isSpecificMapStop), [stops]);
   const signature = JSON.stringify({ provinceId, stops: searchable.map(s => [s.id, s.title, s.category]) });
-  const links = useMemo(() => dayDirectionsLinks(stops, provinceName), [stops, provinceName]);
+  const links = useMemo(() => dayDirectionsLinks(stops, provinceName, points), [stops, provinceName, points]);
+  const airKm = useMemo(() => dayAirDistanceKm(stops, points), [stops, points]);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,6 +266,9 @@ export function ItineraryDayMap({ provinceId, provinceName, stops }: Props) {
       {notLocated.length ? <p className="mt-2 text-xs leading-5 text-slate-500">
         Chưa ghim: {notLocated.slice(0, 4).map(s => s.title).join(', ')}{notLocated.length > 4 ? ` và ${notLocated.length - 4} điểm khác` : ''}.
       </p> : null}
+      {airKm !== null ? <p className="mt-2 text-xs font-semibold text-slate-700">
+        Khoảng cách đường chim bay giữa các điểm: {airKm.toLocaleString('vi-VN')} km (không phải quãng đường lái xe).
+      </p> : null}
       <p className="mt-2 text-[11px] leading-5 text-slate-500">
         Ghim tham khảo từ OpenStreetMap; đường nét đứt chỉ nối thứ tự các điểm, <strong>không phải tuyến đường thực tế</strong>.
         Hãy xác minh điểm đến, khoảng cách và giờ mở cửa trước khi đi.
@@ -284,7 +288,7 @@ export function ItineraryDayMap({ provinceId, provinceName, stops }: Props) {
         ) : null}
       </div>
       <p className="mt-2 text-[11px] leading-4 text-slate-500">
-        Chỉ đường do Google Maps tìm theo tên địa điểm, không phải tuyến đã kiểm chứng. Các món ăn chung không được đưa vào tuyến.
+        Liên kết ưu tiên tọa độ các ghim đã định vị, còn điểm thiếu ghim dùng tên để Google Maps tìm. Google Maps tính tuyến đường thực tế; hãy xác minh điểm đến trước khi đi.
       </p>
     </section>
   );

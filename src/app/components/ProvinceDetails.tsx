@@ -1,3 +1,4 @@
+import { TravelServicesPanel } from './TravelServicesPanel';
 import { useEffect, useState, type ComponentType } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Camera, Clock, Info, MapPin, Utensils } from 'lucide-react';
@@ -221,6 +222,7 @@ export function ProvinceDetails({ province }: { province: string }) {
             )}
           </motion.div>
         </AnimatePresence>
+        <div className="mt-5"><TravelServicesPanel provinceName={title} /></div>
       </div>
       {selectedItem && detail && (
         <DiscoveryDetailOverlay kind={selectedItem.kind} item={detail} provinceTitle={title}

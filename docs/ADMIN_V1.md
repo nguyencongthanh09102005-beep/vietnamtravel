@@ -74,3 +74,12 @@ Nếu `/admin` báo không có quyền: xác nhận `.env.local` có `ADMIN_EMAI
 Chỉ nhánh `feature/vietnamtravel-map-affiliate-osm-20261114`. Không merge `main`, không deploy Vercel, không áp dụng migration Turso production khi chưa được bạn đồng ý riêng. GitHub Actions kiểm thử ở môi trường tạm với SQLite, **không phải** test database/website production.
 
 **Lệnh cũ `npm run catalog:photos` nay chỉ tạo ứng viên chờ duyệt; không tự gắn ảnh lên nội dung công khai.**
+
+## Tìm nguồn tự động / Duyệt tất cả
+
+- Trong panel **Thêm/Sửa**, bấm **AI tìm nguồn**. Chương trình trả các **link gợi ý**, bạn mở từng link gốc, kiểm chứng, rồi bấm **Chọn nguồn** để điền vào hai ô URL. Không dùng hai URL cùng một tổ chức làm hai nguồn độc lập. Tên nút đề cập AI theo trải nghiệm sản phẩm, nhưng nguồn được tìm qua chỉ mục web; AI không tự chấp nhận bằng chứng.
+- Trong tab **Cập nhật**, bấm **Tìm nguồn tất cả**. Khi chưa chọn tỉnh, tạo một job cho tất cả 34 tỉnh; nếu đã chọn tỉnh thì chỉ quét tỉnh đó. Job lưu danh sách bản ghi còn thiếu tối thiểu 2 nguồn và xử lý **một mục mỗi lần worker chạy**. Có thể mất nhiều vòng cron; không cam kết tìm đủ nguồn.
+- Muốn tìm trên web rộng, khai báo biến **`BRAVE_SEARCH_API_KEY`** vào `.env.local` (dịch vụ Brave Search API bên ngoài, có gói và chi phí/giới hạn riêng) rồi **khởi động lại server**. Không có key thì chỉ dò từ metadata RSS đã lưu trong SQLite/Turso; sẽ không thể bổ sung đủ 100 món nếu không có bài phù hợp. Không tải ảnh, không tự scrape nội dung bài.
+- Mọi kết quả mới được lưu ở bảng `travel_content_source_suggestions` với trạng thái **suggested**, không tự ghi vào `travel_content_versions`, không tự đánh dấu nguồn đã xác minh. **Dùng nguồn** chỉ mở panel cho bạn tự đối chiếu và chọn trước khi lưu phiên bản pending.
+- Trong tab **Duyệt**, có **Chọn tất cả đủ điều kiện** và **Duyệt tất cả đã chọn** (tối đa **20 phiên bản/lần**). Bạn phải tick xác nhận đã đọc/đối chiếu từng mục. Server kiểm tra lại quyền admin, nguồn độc lập, giấy phép/ghi công ảnh, trạng thái pending và quarantine trước mỗi quyết định. Mục không đạt được báo lý do và bỏ qua; không tự duyệt ảnh theo lô.
+- Mở rộng bộ nguồn trong tương lai cần kiểm tra điều khoản Brave và các nguồn cung cấp. Tìm được URL khác domain **không tự chứng minh** nguồn phù hợp, nội dung có thật hay hai tổ chức độc lập.

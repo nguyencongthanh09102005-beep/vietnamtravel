@@ -43,7 +43,7 @@ function localApi(): Plugin {
         'RESEND_API_KEY', 'AUTH_EMAIL_FROM', 'AUTH_PUBLIC_URL',
         'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_FALLBACK_MODEL', 'GOOGLE_MAPS_API_KEY',
         'CRON_SECRET', 'CONTENT_REVIEW_SECRET', 'ADMIN_EMAILS',
-        'FLICKR_API_KEY', 'FLICKR_API_COMMERCIAL_APPROVED', 'LOCAL_SOURCE_AI_CLASSIFY',
+        'FLICKR_API_KEY', 'FLICKR_API_COMMERCIAL_APPROVED', 'BRAVE_SEARCH_API_KEY', 'LOCAL_SOURCE_AI_CLASSIFY',
         'LOCAL_CONTENT_AUTORUN', 'CONTENT_DB_CANONICAL']) {
         if (process.env[key] === undefined && env[key] !== undefined) {
           process.env[key] = env[key];

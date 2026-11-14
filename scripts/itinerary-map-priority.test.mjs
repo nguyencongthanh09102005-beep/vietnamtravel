@@ -182,3 +182,42 @@ test('Wikipedia exact-title source can validate places in officially merged prov
   assert.equal(extractWikipediaCoordinates('Da Nang', ['Tên khác'],
     { query: { pages } }).length, 0);
 });
+
+test('HCMC works from curated map pins without a populated local database', async () => {
+  const { REVIEWED_MAP_LANDMARKS } =
+    await import('../.api-test-dist/src/data/verifiedMapLandmarks.js');
+  const { stablePlaceId, pinForGroundedStop } =
+    await import('../.api-test-dist/api/_lib/itinerary-map-priority.js');
+  const { normalizeGroundedItinerary } =
+    await import('../.api-test-dist/api/_lib/grounded-itinerary.js');
+  const { parseRequest, validateStoredPlan } =
+    await import('../.api-test-dist/src/utils/itinerary.js');
+
+  const known = REVIEWED_MAP_LANDMARKS['Ho Chi Minh'];
+  assert.equal(known.length, 3);
+  const places = known.map(p => ({
+    ...p, source: 'reviewed_reference', id: stablePlaceId('Ho Chi Minh', p.name),
+  }));
+  const trip = parseRequest({
+    provinceId: 'Ho Chi Minh', days: 3, partySize: 5, totalBudgetVnd: 10000000,
+    style: 'nature', includeArrivalTransport: false, preferences: { notes: '' },
+  });
+  const schedule = [1, 2, 3].map(day => ({
+    day, stops: places.map((place, index) => ({
+      id: 'd' + day + 's' + (index + 1), placeId: place.id, period: 'afternoon',
+      startTime: ['09:00', '12:00', '15:00'][index],
+      description: 'Khám phá một điểm đến có tọa độ tham khảo',
+      estimatedCostVnd: 100000,
+    })),
+  }));
+  const generated = normalizeGroundedItinerary({ title: 'Khám phá Sài Gòn', schedule }, trip, places);
+  assert.ok(generated);
+  const reloaded = validateStoredPlan(JSON.parse(JSON.stringify(generated)));
+  assert.ok(reloaded);
+  for (const day of reloaded.schedule) {
+    assert.equal(day.stops.length, 3);
+    assert.ok(day.stops.every(stop => pinForGroundedStop(stop, places)));
+  }
+  assert.deepEqual(reloaded.schedule[0].stops.map(stop => stop.title),
+    ['Chợ Bến Thành', 'Dinh Độc Lập', 'Landmark 81']);
+});

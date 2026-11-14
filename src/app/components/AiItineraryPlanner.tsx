@@ -584,7 +584,7 @@ export function AiItineraryPlanner({ open, provinceId, authenticated, requestedS
                             </div>
                             <label className="block"><Label>Hoạt động / món ăn</Label>
                               <input maxLength={160} value={stop.title}
-                                onChange={event => changeStop(selectedDay, stop.id, { title: event.target.value, mapUrl: null, source: 'ai_suggestion' })}
+                                onChange={event => changeStop(selectedDay, stop.id, { title: event.target.value, mapUrl: null, placeId: null, source: 'ai_suggestion' })}
                                 className="w-full rounded-lg border border-slate-200 bg-white p-2 text-sm"/>
                             </label>
                             <label className="block"><Label>Ghi chú</Label>

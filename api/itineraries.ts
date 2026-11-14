@@ -1,5 +1,6 @@
 import { dbOne, dbQuery, getRequestAuthSession, json, makeId } from './_lib/auth.js';
 import { validateStoredPlan, type SavedItinerary } from '../src/utils/itinerary.js';
+import { getPriorityMapPlaces, matchKnownMapPlaceById, normalizeMapName } from './_lib/itinerary-map-priority.js';
 
 function readSaved(row: Record<string, unknown>): SavedItinerary | null {
   try {
@@ -50,6 +51,18 @@ export default {
       const obj = body as Record<string, unknown>;
       const plan = validateStoredPlan(obj.plan);
       if (!plan) return json({ error: 'Lịch trình không đạt kiểm tra cấu trúc hoặc ngân sách.' }, 400);
+      // Existing plans with no placeId remain valid. For grounded stops,
+      // verify that the stored name really belongs to its province-scoped ID.
+      const grounded = plan.schedule.flatMap(day => day.stops).filter(stop => stop.placeId);
+      if (grounded.length) {
+        const allowed = await getPriorityMapPlaces(plan.provinceId);
+        if (grounded.some(stop => {
+          const place = matchKnownMapPlaceById(stop.placeId!, allowed);
+          return !place || normalizeMapName(place.name) !== normalizeMapName(stop.title);
+        })) {
+          return json({ error: 'Một số địa điểm đã bị đổi tên hoặc không còn nằm trong danh sách định vị hợp lệ. Vui lòng tạo lại lịch trình hoặc sửa điểm dừng.' }, 400);
+        }
+      }
       const timestamp = new Date().toISOString();
 
       if (request.method === 'POST') {

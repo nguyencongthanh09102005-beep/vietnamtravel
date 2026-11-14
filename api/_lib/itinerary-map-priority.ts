@@ -98,3 +98,11 @@ export function matchKnownMapPlace(title: string, places: PriorityMapPlace[]): P
   const key = normalizeMapName(title);
   return places.find(place => normalizeMapName(place.name) === key) ?? null;
 }
+
+/** A plan has usable map coverage only when DISTINCT approved names match pins. */
+export function countMapReadyStops(
+  stops: ReadonlyArray<{ title: string }>, places: PriorityMapPlace[],
+): number {
+  const named = new Set(stops.map(stop => normalizeMapName(stop.title)));
+  return places.filter(place => named.has(normalizeMapName(place.name))).length;
+}

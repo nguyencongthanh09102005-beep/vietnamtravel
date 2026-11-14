@@ -36,3 +36,15 @@ test('reviewed Mộc Châu landmarks are real named locations with traceable sou
   assert.equal(matchKnownMapPlace('Cầu kính Bạch Long', sonLa)?.name, 'Cầu kính Bạch Long');
   assert.equal(matchKnownMapPlace('Cao nguyên Mộc Châu', sonLa), null);
 });
+
+test('map coverage requires distinct and exact approved place names', async () => {
+  const { countMapReadyStops } = await import('../.api-test-dist/api/_lib/itinerary-map-priority.js');
+  const mapped = [
+    { name: 'Thác Dải Yếm', latitude: 20.8129, longitude: 104.5916, source: 'reviewed_reference' },
+    { name: 'Cầu kính Bạch Long', latitude: 20.849, longitude: 104.56975, source: 'reviewed_reference' },
+  ];
+  assert.equal(countMapReadyStops([{ title: 'Thác Dải Yếm' }, { title: 'Cầu kính Bạch Long' }], mapped), 2);
+  assert.equal(countMapReadyStops([{ title: 'Thác Dải Yếm' }, { title: 'Thác Dải Yếm' }], mapped), 1);
+  assert.equal(countMapReadyStops([{ title: 'Quán ăn bình dân Mộc Châu' }], mapped), 0);
+  assert.equal(countMapReadyStops([{ title: 'Cầu kính Bạch Long giả' }], mapped), 0);
+});

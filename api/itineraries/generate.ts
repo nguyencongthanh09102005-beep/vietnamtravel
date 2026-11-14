@@ -112,7 +112,8 @@ export default {
         // If there are at least two grounded venues, retry once when the
         // requested day has fewer than two real map pins. Retain the first
         // valid plan as a fallback if the second AI request fails.
-        const focus = candidate.schedule[(targetDay ?? 1) - 1];
+        const focusIndex = typeof targetDay === 'number' ? targetDay - 1 : 0;
+        const focus = candidate.schedule[focusIndex];
         const mappedCount = countMapReadyStops(focus.stops, mappedPlaces);
         if (retry === 0 && mappedPlaces.length >= 2 && focus.stops.length >= 2 && mappedCount < 2) {
           fallbackPlan = candidate;

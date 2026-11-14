@@ -2,7 +2,7 @@ import { dbQuery, json } from './_lib/auth.js';
 import { provinceDetailsCatalog, type ProvinceDetailsCatalogItem } from '../src/data/provinceDetailsData.js';
 import { provincesData, type ProvinceId } from '../src/data/provincesData.js';
 import { archiveLegacyCatalog, type CatalogSection } from '../src/utils/contentArchive.js';
-import { AUTO_CONTENT_GATE_VERSION, isSubjectExcluded, normalizedSubjectKey } from '../src/utils/contentQuality.js';
+import { AUTO_CONTENT_GATE_VERSION, evaluateContentTaxonomy, isSubjectExcluded, normalizedSubjectKey } from '../src/utils/contentQuality.js';
 
 const legacyRows = archiveLegacyCatalog().records;
 const legacyById = new Map(legacyRows.map(row => [row.id, row]));
@@ -70,6 +70,25 @@ export function mergeVerifiedContent(
           typeof autoPayload.name !== 'string' ||
           isSubjectExcluded(autoPayload.name,section === 'cuisine' ? 'cuisine' : 'places',
             String(autoPayload.description ?? ''))) continue;
+      // Recheck older auto-approved cuisine records with the CURRENT regional
+      // evidence rule on every public read. Do not mutate historic versions;
+      // generic worldwide dishes with only an incidental province mention
+      // become review-only rather than appearing as regional specialties.
+      if (section === 'cuisine') {
+        const evidence = autoPayload.taxonomyEvidence;
+        const taxonomy = evidence && typeof evidence === 'object' && !Array.isArray(evidence)
+          ? evidence as Record<string, unknown> : {};
+        if (!Array.isArray(taxonomy.categories) ||
+          !taxonomy.categories.every(item => typeof item === 'string') ||
+          typeof taxonomy.wikidataDescription !== 'string' ||
+          !evaluateContentTaxonomy({
+            name: autoPayload.name,
+            description: String(autoPayload.detail ?? autoPayload.description ?? ''),
+            categoryTitles: taxonomy.categories,
+            wikidataDescription: taxonomy.wikidataDescription,
+            section: 'cuisine', provinceId,
+          }).approved) continue;
+      }
     }
     if (section === 'overview' && safeOverview(value)) {
       result.title = value.title;

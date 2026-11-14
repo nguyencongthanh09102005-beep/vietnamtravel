@@ -76,3 +76,37 @@ test('approved taxonomy v2 content deduplicates a dish already written manually'
   assert.equal(a.data.cuisine.length,provinceDetailsCatalog['Quang Ngai'].data.cuisine.length);
   assert.ok(!a.data.cuisine.some(x=>x.name==='Don (món ăn)'));
 });
+
+test('Koi-like generic foreign cuisine cannot reappear from an older approved v2 version',()=>{
+  const koi={
+    name:'Koi', description:'Món gỏi cá phổ biến trong khu vực',
+    detail:'Koi là món ăn của Lào và Thái Lan. Một số nơi tại Sơn La cũng nhắc đến món này.',
+    image:'',wikidataId:'Q112233',sourceUrl:'https://vi.wikipedia.org/wiki/Koi',
+    taxonomyGateVersion:2,
+    taxonomyEvidence:{categories:['Ẩm thực Lào','Ẩm thực Thái Lan'],wikidataDescription:'món ăn của Lào'},
+  };
+  const verdict=evaluateContentTaxonomy({
+    name:koi.name,description:koi.detail,
+    categoryTitles:koi.taxonomyEvidence.categories,
+    wikidataDescription:koi.taxonomyEvidence.wikidataDescription,
+    section:'cuisine',provinceId:'Son La',
+  });
+  assert.equal(verdict.approved,false);
+  assert.match(verdict.reason,/địa phương/);
+  const baseline=provinceDetailsCatalog['Son La'].data.cuisine;
+  const merged=mergeVerifiedContent('Son La',[{
+    section:'cuisine',content_id:'auto_koi_sonla',
+    version_id:'auto_v2_koi',payload_json:JSON.stringify(koi),
+  }]);
+  assert.equal(merged.data.cuisine.length,baseline.length);
+  assert.ok(!merged.data.cuisine.some(x=>x.name==='Koi'));
+});
+test('locally identified cuisine with regional metadata stays eligible',()=>{
+  const verdict=evaluateContentTaxonomy({
+    name:'Don Quảng Ngãi',section:'cuisine',provinceId:'Quang Ngai',
+    description:'Don là món ăn truyền thống của tỉnh Quảng Ngãi, được nhiều người biết đến.',
+    categoryTitles:['Ẩm thực Quảng Ngãi'],
+    wikidataDescription:'món ăn truyền thống Việt Nam',
+  });
+  assert.equal(verdict.approved,true,verdict.reason);
+});

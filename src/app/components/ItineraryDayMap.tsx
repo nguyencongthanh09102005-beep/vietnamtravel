@@ -243,8 +243,8 @@ export function ItineraryDayMap({ provinceId, provinceName, stops, onEditStop }:
 
   return (
     <section aria-label="Bản đồ lịch trình theo ngày" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(235px,0.8fr)_minmax(0,1.2fr)]">
-        <div className="min-w-0 border-b border-slate-200 p-4 xl:border-b-0 xl:border-r xl:p-5">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(235px,0.8fr)_minmax(0,1.2fr)]">
+        <div className="min-w-0 border-b border-slate-200 p-4 lg:border-b-0 lg:border-r lg:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-slate-900">Lộ trình ngày này</h3>
             <span className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] text-slate-500">
@@ -310,7 +310,7 @@ export function ItineraryDayMap({ provinceId, provinceName, stops, onEditStop }:
           </p>
         </div>
 
-        <div className="min-w-0 p-4 xl:p-5">
+        <div className="min-w-0 p-4 lg:p-5">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-bold text-slate-950">

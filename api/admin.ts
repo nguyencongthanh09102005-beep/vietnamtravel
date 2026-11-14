@@ -140,7 +140,7 @@ async function editOrCreate(body:Body,actor:string) {
   const previous=mode==='edit'?await approvedContent(id):null;
   const payload=previous ? bodyObject(JSON.parse(String(previous.payload_json))) :
     mode==='edit' ? (catalogPayload(id)??{}) : {};
-  const next={...payload,name:info.name,description:info.description,detail:info.detail,
+  const next={...payload,image:typeof payload.image==='string'?payload.image:'',name:info.name,description:info.description,detail:info.detail,
     sourceUrl:info.refs[0],sourceUrls:info.refs,editorialReview:'pending'};
   // A manual text edit must never introduce an unreviewed image URL.
   const now=new Date().toISOString();

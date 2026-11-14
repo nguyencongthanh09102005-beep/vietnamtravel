@@ -16,7 +16,7 @@ function validItem(value: unknown): value is { name: string; description: string
   const x = value as Record<string, unknown>;
   return typeof x.name === 'string' && x.name.trim().length > 1 && x.name.length <= 180
     && typeof x.description === 'string' && x.description.trim().length > 0 && x.description.length <= 5000
-    && (validImage(x.image) || (x.image === '' && typeof x.wikidataId === 'string' && /^Q\d+$/.test(x.wikidataId) && typeof x.sourceUrl === 'string' && x.sourceUrl.startsWith('https://vi.wikipedia.org/wiki/'))) && Object.keys(x).length <= 20;
+    && (validImage(x.image) || (x.image === '' && ((typeof x.wikidataId === 'string' && /^Q\d+$/.test(x.wikidataId) && typeof x.sourceUrl === 'string' && x.sourceUrl.startsWith('https://vi.wikipedia.org/wiki/')) || (Array.isArray(x.sourceUrls) && x.sourceUrls.length >= 2 && x.sourceUrls.every(url => typeof url === 'string' && url.startsWith('https://')))))) && Object.keys(x).length <= 20;
 }
 function validHistory(value: unknown): value is { year: string; event: string } {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;

@@ -141,3 +141,28 @@ test('province jobs are queued and deduplicated; audit captures admin actions',a
   assert.equal(history.status,200);
   assert.ok((await history.json()).history.length>=6);
 });
+
+test('bulk approve must be explicit and skips invalid source candidates',async()=>{
+  const approved=await submit({action:'create',provinceId:'Son La',section:'cuisine',
+    name:'Món thử nghiệm được duyệt theo lô',
+    description:'Món thử nghiệm chỉ dùng để kiểm chứng quy trình duyệt hàng loạt.',
+    sourceUrls});
+  assert.equal(approved.status,200);
+  const validId=approved.data.versionId;
+  const other='admin_v1_invalid_source_test';
+  await dbQuery("INSERT INTO travel_content_versions(version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,created_at) VALUES (?,?,?,?,?,'ai_draft',?,'pending',?)",
+    [other,'invalid_source_item','Son La','cuisine',JSON.stringify({
+      name:'Món chưa đủ nguồn',description:'Chỉ có một bài gợi ý',image:'',sourceUrls:[sourceUrls[0]]
+    }),sourceUrls[0],new Date().toISOString()]);
+  const denied=await submit({action:'approve-many',versionIds:[validId,other],confirmHumanReview:false});
+  assert.equal(denied.status,400);
+  const before=await dbQuery('SELECT reviewed_status FROM travel_content_versions WHERE version_id=?',[validId]);
+  assert.equal(before.rows[0].reviewed_status,'pending');
+  const accepted=await submit({action:'approve-many',versionIds:[validId,other],confirmHumanReview:true});
+  assert.equal(accepted.status,200);
+  assert.equal(accepted.data.approved,1);
+  assert.equal(accepted.data.skipped,1);
+  const bad=await dbQuery('SELECT reviewed_status FROM travel_content_versions WHERE version_id=?',[other]);
+  assert.equal(bad.rows[0].reviewed_status,'pending');
+  assert.equal((await submit({action:'approve-many',versionIds:Array(21).fill(validId),confirmHumanReview:true})).status,400);
+});

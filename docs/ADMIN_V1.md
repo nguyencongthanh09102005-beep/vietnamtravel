@@ -72,3 +72,5 @@ Nếu `/admin` báo không có quyền: xác nhận `.env.local` có `ADMIN_EMAI
 ## Ràng buộc phát triển
 
 Chỉ nhánh `feature/vietnamtravel-map-affiliate-osm-20261114`. Không merge `main`, không deploy Vercel, không áp dụng migration Turso production khi chưa được bạn đồng ý riêng. GitHub Actions kiểm thử ở môi trường tạm với SQLite, **không phải** test database/website production.
+
+**Lệnh cũ `npm run catalog:photos` nay chỉ tạo ứng viên chờ duyệt; không tự gắn ảnh lên nội dung công khai.**

@@ -5,6 +5,10 @@ import type { ProvinceId } from '../../src/data/provincesData.js';
 
 /** Process one bounded unit of work. No browser request waits for scraping. */
 export async function processNextAdminJob() {
+  // A serverless timeout can interrupt a job before it releases its lease.
+  // Expire stale claims explicitly so they are visible as failed and can be retried.
+  await dbQuery("UPDATE travel_admin_jobs SET state='failed',error='WORKER_TIMEOUT_OR_INTERRUPTED',finished_at=? WHERE state='running' AND started_at<?",
+    [new Date().toISOString(),new Date(Date.now()-15*60*1000).toISOString()]);
   const row=await dbOne("SELECT * FROM travel_admin_jobs WHERE state='queued' ORDER BY created_at LIMIT 1");
   if(!row)return {state:'idle'};
   const jobId=String(row.job_id),kind=String(row.kind),provinceId=String(row.province_id) as ProvinceId;

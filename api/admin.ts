@@ -4,6 +4,7 @@ import { archiveLegacyCatalog } from '../src/utils/contentArchive.js';
 import { provincesData, type ProvinceId } from '../src/data/provincesData.js';
 import { normalizedSubjectKey } from '../src/utils/contentQuality.js';
 import { reviewPhotoImage } from './_lib/photo-review.js';
+import { generateGeminiText } from './_lib/gemini.js';
 
 type Section = 'places' | 'cuisine';
 type Body = Record<string,unknown>;
@@ -21,7 +22,10 @@ function sources(value:unknown):string[] {
   }).slice(0,6);
 }
 function independentlySourced(links:string[]):boolean {
-  try { return new Set(links.map(x=>new URL(x).hostname.replace(/^www\./,'').toLowerCase())).size>=2; }
+  try { return new Set(links.map(x=>{
+    const host=new URL(x).hostname.replace(/^(www|m)\./,'').toLowerCase();
+    return /(^|\.)(wikipedia|wikidata|wikimedia)\.org$/.test(host)?'wikimedia-group':host;
+  })).size>=2; }
   catch { return false; }
 }
 function draft(value:Body) {
@@ -140,7 +144,12 @@ async function editOrCreate(body:Body,actor:string) {
   const previous=mode==='edit'?await approvedContent(id):null;
   const payload=previous ? bodyObject(JSON.parse(String(previous.payload_json))) :
     mode==='edit' ? (catalogPayload(id)??{}) : {};
-  const next={...payload,image:typeof payload.image==='string'?payload.image:'',name:info.name,description:info.description,detail:info.detail,
+  const oldPhoto=typeof payload.image==='string'?payload.image:'';
+  const rightsOk=oldPhoto && allowedLicense(text(payload.imageLicense,100)) &&
+    text(payload.imageAttribution,600) && text(payload.imageCreditUrl,600);
+  const next={...payload,image:rightsOk?oldPhoto:'',
+    ...(!rightsOk?{imageLicense:'',imageAttribution:'',imageCreditUrl:'',imageStatus:'pending'}:{}),
+    name:info.name,description:info.description,detail:info.detail,
     sourceUrl:info.refs[0],sourceUrls:info.refs,editorialReview:'pending'};
   // A manual text edit must never introduce an unreviewed image URL.
   const now=new Date().toISOString();
@@ -246,6 +255,25 @@ async function reviewPhoto(body:Body,actor:string) {
   await audit(actor,'photo_approve',cid,vId);
   return json({ok:true,status:'approved',versionId:vId});
 }
+async function composeDescription(body:Body) {
+  const name=text(body.name,150),description=text(body.description,850),detail=text(body.detail,2400);
+  if(!name||description.length<10||!independentlySourced(sources(body.sourceUrls)))
+    return json({error:'Cần nội dung có sẵn và hai nguồn độc lập trước khi nhờ AI biên tập.'},400);
+  if(!process.env.GEMINI_API_KEY)return json({error:'Chưa có GEMINI_API_KEY trên server'},503);
+  const prompt=[
+    'Bạn là biên tập viên mô tả du lịch Việt Nam. Chỉ dùng các dữ kiện được cung cấp dưới đây, không truy cập hoặc suy đoán nội dung URL.',
+    'Viết đúng 2 đến 3 câu tiếng Việt tự nhiên, súc tích, khách quan, dài tối đa 350 ký tự.',
+    'Không chép nguyên câu dài, không tự gán xuất xứ hoặc mức độ nổi tiếng, không thêm địa điểm, lịch sử, số liệu, lời quảng cáo.',
+    'Bỏ từ nguyên và chi tiết bách khoa không phục vụ khách du lịch. Chỉ xuất đoạn mô tả, không mở đầu hay Markdown.',
+    'Tên: '+name,'Nội dung xác minh do admin cung cấp: '+description,
+    'Ghi chú: '+detail.slice(0,1500),
+  ].join('\n');
+  const output=await generateGeminiText(prompt);
+  if(!output)return json({error:'AI không phản hồi. Nội dung hiện tại vẫn được giữ nguyên.'},503);
+  const cleaned=output.replace(/[*#`]/g,'').replace(/\s+/g,' ').trim().slice(0,400);
+  if(cleaned.length<35)return json({error:'Kết quả AI không đạt yêu cầu, vui lòng tự chỉnh sửa.'},503);
+  return json({description:cleaned,status:'pending_editorial_review'});
+}
 async function enqueueJob(body:Body,actor:string) {
   const provinceId=text(body.provinceId,100),kind=text(body.kind,20);
   if(!validProvince(provinceId)||!['photos','sources'].includes(kind))return json({error:'Tỉnh hoặc loại tác vụ không hợp lệ'},400);
@@ -293,6 +321,7 @@ export default {
       if(action==='archive'||action==='unarchive')return toggleArchive(body,session.user.id);
       if(action==='photo')return reviewPhoto(body,session.user.id);
       if(action==='enqueue')return enqueueJob(body,session.user.id);
+      if(action==='compose')return composeDescription(body);
       return json({error:'Thao tác không hỗ trợ'},400);
     } catch(error) {
       console.error('[admin]',error);

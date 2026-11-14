@@ -159,7 +159,8 @@ export default {
         new Set(removed.rows.map(row=>String(row.content_id))),
         process.env.CONTENT_DB_CANONICAL==='1');
       const response = json({ provinceId, data, source: trustedRows.length ? 'approved_database' : 'legacy_fallback' });
-      response.headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+      // Moderated removals must not linger in browser/CDN stale caches.
+      response.headers.set('Cache-Control', 'no-store');
       return response;
     } catch (error) {
       console.warn('[content] database unavailable, using original catalog', error);
@@ -168,7 +169,7 @@ export default {
       base.data.places = [];
       base.data.cuisine = [];
       const response = json({ provinceId, data: base, source: 'database_unavailable' });
-      response.headers.set('Cache-Control', 'public, max-age=30');
+      response.headers.set('Cache-Control', 'no-store');
       return response;
     }
   },

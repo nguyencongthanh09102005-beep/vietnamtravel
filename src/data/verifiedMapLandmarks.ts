@@ -33,6 +33,10 @@ export const REVIEWED_MAP_LANDMARKS: Partial<Record<ProvinceId, readonly Reviewe
   'Da Nang': [
     { name: 'Cầu Rồng', latitude: 16.06111, longitude: 108.22667,
       sourceUrl: 'https://en.wikipedia.org/wiki/Dragon_Bridge_(Da_Nang)' },
+    { name: 'Bà Nà Hills (Cầu Vàng)', latitude: 15.99486, longitude: 107.99625,
+      sourceUrl: 'https://en.wikipedia.org/wiki/Golden_Bridge_(Vietnam)' },
+    { name: 'Ngũ Hành Sơn', latitude: 16.0039528, longitude: 108.2626056,
+      sourceUrl: 'https://www.travelfish.org/sight_profile/vietnam/central_vietnam/da_nang/da_nang/407' },
   ],
   'Son La': [
     {

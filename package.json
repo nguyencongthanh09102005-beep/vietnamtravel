@@ -18,6 +18,7 @@
     "catalog:sources": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/scan-trusted-sources.mjs",
     "catalog:core-stage": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/stage-core-candidates.mjs",
     "catalog:image-queue": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/queue-review-images.mjs",
+    "catalog:media-audit": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/catalog-media-audit.mjs",
     "catalog:image-review": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/review-image-candidates.mjs",
     "catalog:osm": "tsc -p tsconfig.api.json --noEmit false --outDir .api-test-dist && node scripts/stage-osm-destinations.mjs"
   },

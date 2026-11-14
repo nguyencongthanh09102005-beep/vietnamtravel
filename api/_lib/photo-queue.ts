@@ -46,7 +46,7 @@ function safeCommonsFile(name:string){
 
 /** Keyword search produces review CANDIDATES, never a verified picture. */
 export async function searchCommonsImageCandidates(args:{
-  subject:string;province:string;fetcher?:typeof fetch;limit?:number;
+  subject:string;province:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;onFailure?:(reason:string)=>void;
 }):Promise<ImageReviewCandidate[]>{
   const fetcher=args.fetcher??fetch;
   const query=(args.subject+' '+args.province).trim().slice(0,110);
@@ -89,14 +89,14 @@ export async function searchCommonsImageCandidates(args:{
       if(candidates.length>=Math.min(args.limit??4,6))break;
     }
     return candidates;
-  }catch(error){console.warn('[photo-queue] Commons search unavailable',String(error).slice(0,130));return [];}
+  }catch(error){args.onFailure?.('Commons: '+String(error).slice(0,120));console.warn('[photo-queue] Commons search unavailable',String(error).slice(0,130));return [];}
 }
 
 /** Flickr requires a developer API key and separate commercial API rights.
  * Allow only CC BY, CC BY-SA and CC0: NEVER NC/ND/rights-reserved.
  * A search match is still ONLY a human-review candidate. */
 export async function searchFlickrImageCandidates(args:{
-  subject:string;province:string;apiKey?:string;fetcher?:typeof fetch;limit?:number;
+  subject:string;province:string;apiKey?:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;
 }):Promise<ImageReviewCandidate[]>{
   const key=(args.apiKey??'').trim();
   if(!key||!args.subject.trim())return [];
@@ -132,7 +132,7 @@ export async function searchFlickrImageCandidates(args:{
       if(candidates.length>=Math.min(args.limit??4,6))break;
     }
     return candidates;
-  }catch(error){console.warn('[photo-queue] Flickr search unavailable',String(error).slice(0,130));return [];}
+  }catch(error){args.onFailure?.('Flickr: '+String(error).slice(0,120));console.warn('[photo-queue] Flickr search unavailable',String(error).slice(0,130));return [];}
 }
 
 
@@ -179,6 +179,7 @@ export async function searchOpenverseImageCandidates(args:{
     }
     return out;
   }catch(error){
+    args.onFailure?.('Openverse: '+String(error).slice(0,120));
     console.warn('[photo-queue] Openverse search unavailable',String(error).slice(0,130));
     return [];
   }
@@ -190,7 +191,8 @@ function photoId(contentId:string,sourceUrl:string){
 /** All photo searches are additive to a queue. Nothing alters public cards. */
 export async function enqueueImagesForReview(options:{
   fetcher?:typeof fetch;flickrApiKey?:string;includeOpenverse?:boolean;maxItems?:number;
-  provinceId?:ProvinceId;includeLegacy?:boolean;
+  provinceId?:ProvinceId;includeLegacy?:boolean;offsetItems?:number;
+  provider?:'commons'|'openverse';
 }={}){
   const max=Math.max(1,Math.min(50,options.maxItems??25));
   const rows=await dbQuery(
@@ -217,9 +219,11 @@ export async function enqueueImagesForReview(options:{
   const candidates=[...legacy,...rows.rows].filter(row=>
     !quarantined.has(String(row.content_id)) &&
     (!options.provinceId || String(row.province_id)===options.provinceId));
-  const summary={checked:0,newImages:0,missing:0};
-  for(const row of candidates){
-    if(summary.checked>=max)break;
+  const summary={checked:0,newImages:0,missing:0,visited:0,errors:[] as string[]};
+  const offset=Math.max(0,Math.floor(options.offsetItems??0));
+  for(const row of candidates.slice(offset)){
+    if(summary.visited>=max)break;
+    summary.visited++;
     let payload:Record<string,unknown>;
     try{payload=json(JSON.parse(String(row.payload_json)));}catch{continue;}
     if(payload.taxonomyGateVersion!==2||typeof payload.name!=='string'||payload.image)continue;
@@ -231,15 +235,18 @@ export async function enqueueImagesForReview(options:{
     const id=String(row.province_id) as ProvinceId;
     const province=provinceDetailsCatalog[id]?.title??id;
     summary.checked++;
-    const fromCommons=await searchCommonsImageCandidates({
+    const fromCommons=options.provider==='openverse'?[]:await searchCommonsImageCandidates({
       subject:payload.name,province,fetcher:options.fetcher,limit:4,
+      onFailure:reason=>summary.errors.push(reason),
     });
     const fromFlickr=options.flickrApiKey ? await searchFlickrImageCandidates({
       subject:payload.name,province,apiKey:options.flickrApiKey,
       fetcher:options.fetcher,limit:4,
+      onFailure:reason=>summary.errors.push(reason),
     }) : [];
-    const fromOpenverse=options.includeOpenverse ? await searchOpenverseImageCandidates({
+    const fromOpenverse=options.includeOpenverse && options.provider!=='commons' ? await searchOpenverseImageCandidates({
       subject:payload.name,province,fetcher:options.fetcher,limit:3,
+      onFailure:reason=>summary.errors.push(reason),
     }) : [];
     const combined=[...fromCommons,...fromFlickr,...fromOpenverse]
       .filter((candidate,index,array)=>array.findIndex(item=>item.sourceUrl===candidate.sourceUrl)===index)

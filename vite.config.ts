@@ -15,6 +15,8 @@ function localApi(): Plugin {
     '/api/content': '/api/content.ts',
     '/api/content/refresh': '/api/content/refresh.ts',
     '/api/content/review': '/api/content/review.ts',
+    '/api/admin': '/api/admin.ts',
+    '/api/admin/worker': '/api/admin/worker.ts',
     '/api/administration/check': '/api/administration/check.ts',
     '/api/administration/aliases': '/api/administration/aliases.ts',
     '/api/itineraries': '/api/itineraries.ts',
@@ -40,7 +42,8 @@ function localApi(): Plugin {
       for (const key of ['TURSO_DATABASE_URL', 'TURSO_AUTH_TOKEN', 'LOCAL_DB_PATH',
         'RESEND_API_KEY', 'AUTH_EMAIL_FROM', 'AUTH_PUBLIC_URL',
         'GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_FALLBACK_MODEL', 'GOOGLE_MAPS_API_KEY',
-        'CRON_SECRET', 'CONTENT_REVIEW_SECRET', 'LOCAL_SOURCE_AI_CLASSIFY']) {
+        'CRON_SECRET', 'CONTENT_REVIEW_SECRET', 'ADMIN_EMAILS',
+        'FLICKR_API_KEY', 'FLICKR_API_COMMERCIAL_APPROVED', 'LOCAL_SOURCE_AI_CLASSIFY']) {
         if (process.env[key] === undefined && env[key] !== undefined) {
           process.env[key] = env[key];
         }
@@ -187,14 +190,22 @@ function localContentEnrichment(): Plugin {
           console.warn('[VietnamTravel content] Local source scan unavailable:', error);
         }
       };
+      let adminWorker: ReturnType<typeof setInterval> | undefined;
       server.httpServer?.once('listening', () => {
+        adminWorker = setInterval(() => {
+          if (!localOnly() || !process.env.ADMIN_EMAILS) return;
+          void server.ssrLoadModule('/api/_lib/admin-jobs.ts')
+            .then(({processNextAdminJob}) => processNextAdminJob())
+            .catch(error => console.warn('[admin-jobs]',error));
+        }, 25000);
+        adminWorker.unref?.();
         startup = setTimeout(() => { void run(); }, 5000);
         daily = setInterval(() => { void run(); }, 24 * 3600 * 1000);
         daily.unref?.();
         // Independent from the slower whole-country catalog scan.
-        photoStartup = setTimeout(() => { void photos(); }, 9000);
+        // Photo auto-repair disabled: images only enter review queue.
         feedStartup = setTimeout(() => { void sources(); }, 16000);
-        photoDaily = setInterval(() => { void photos(); }, 24 * 3600 * 1000);
+        // No automatic publication of repaired photos.
         feedDaily = setInterval(() => { void sources(); }, 24 * 3600 * 1000);
         photoDaily.unref?.(); feedDaily.unref?.();
       });
@@ -205,6 +216,7 @@ function localContentEnrichment(): Plugin {
         if (photoStartup) clearTimeout(photoStartup);
         if (feedStartup) clearTimeout(feedStartup);
         if (photoDaily) clearInterval(photoDaily);
+        if (adminWorker) clearInterval(adminWorker);
         if (feedDaily) clearInterval(feedDaily);
       });
     },

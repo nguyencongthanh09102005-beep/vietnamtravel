@@ -18,12 +18,12 @@ try {
   console.log('Province | Places | Foods | Missing photos | Photos without recorded credits | Foods without source | Pending images');
   for(const provinceId of Object.keys(provincesData).filter(id=>!['Hoang Sa','Truong Sa'].includes(id))){
     const active=await dbQuery(
-      \`SELECT i.content_id,i.section,v.version_id,v.payload_json
+      `SELECT i.content_id,i.section,v.version_id,v.payload_json
        FROM travel_content_items i JOIN travel_content_versions v
        ON v.version_id=i.current_version_id
        WHERE i.province_id=? AND v.reviewed_status='approved'
        AND v.province_id=i.province_id AND v.section=i.section
-       AND v.content_id=i.content_id LIMIT 200\`,[provinceId]);
+       AND v.content_id=i.content_id LIMIT 200`,[provinceId]);
     const catalog=mergeVerifiedContent(provinceId,active.rows);
     const cards=[...catalog.data.places,...catalog.data.cuisine];
     const missing=cards.filter(card=>!card.image?.trim()).length;

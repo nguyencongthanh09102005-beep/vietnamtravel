@@ -46,16 +46,24 @@ function safeOverview(value: unknown): value is {
 export function mergeVerifiedContent(
   provinceId: ProvinceId,
   entries: Array<Record<string, unknown>>,
+  quarantined: ReadonlySet<string> = new Set(),
 ): ProvinceDetailsCatalogItem {
   const base = provinceDetailsCatalog[provinceId];
   // A fresh copy avoids mutating the data authored by the original developer.
   const result: ProvinceDetailsCatalogItem = structuredClone(base);
+  // Mask archived items in the original TypeScript catalog too.
+  const original = legacyRows.filter(row=>row.provinceId===provinceId);
+  result.data.places = result.data.places.filter((_v,index)=>
+    !original.some(row=>row.section==='places'&&row.position===index&&quarantined.has(row.id)));
+  result.data.cuisine = result.data.cuisine.filter((_v,index)=>
+    !original.some(row=>row.section==='cuisine'&&row.position===index&&quarantined.has(row.id)));
   const places = new Set(result.data.places.map(x=>normalizedSubjectKey(x.name,provinceId)));
   const cuisine = new Set(result.data.cuisine.map(x=>normalizedSubjectKey(x.name,provinceId)));
   for (const row of entries) {
     const section = row.section as CatalogSection;
     if (!['overview', 'history', 'places', 'cuisine'].includes(section)) continue;
     const contentId = String(row.content_id);
+    if (quarantined.has(contentId)) continue;
     const old = legacyById.get(contentId);
     if (old && (old.provinceId !== provinceId || old.section !== section)) continue;
     const value = safeJson(row.payload_json);
@@ -101,7 +109,9 @@ export function mergeVerifiedContent(
     } else if (section === 'places' && validItem(value)) {
       const key=normalizedSubjectKey(value.name,provinceId);
       if (old) {
-        result.data.places[old.position] = value;
+        const at = result.data.places.findIndex(item=>normalizedSubjectKey(item.name,provinceId)===normalizedSubjectKey((old.payload as {name:string}).name,provinceId));
+        if (at>=0) result.data.places[at] = value;
+        else result.data.places.push(value);
         places.add(key);
       } else if (!places.has(key)) {
         result.data.places.push(value);
@@ -110,7 +120,9 @@ export function mergeVerifiedContent(
     } else if (section === 'cuisine' && validItem(value)) {
       const key=normalizedSubjectKey(value.name,provinceId);
       if (old) {
-        result.data.cuisine[old.position] = value;
+        const at = result.data.cuisine.findIndex(item=>normalizedSubjectKey(item.name,provinceId)===normalizedSubjectKey((old.payload as {name:string}).name,provinceId));
+        if (at>=0) result.data.cuisine[at] = value;
+        else result.data.cuisine.push(value);
         cuisine.add(key);
       } else if (!cuisine.has(key)) {
         result.data.cuisine.push(value);
@@ -141,13 +153,19 @@ export default {
         (String(row.version_id).startsWith('auto_v2_') &&
           (() => { try { return (JSON.parse(String(row.payload_json)) as {taxonomyGateVersion?:number}).taxonomyGateVersion === AUTO_CONTENT_GATE_VERSION; }
             catch { return false; } })()));
-      const data = mergeVerifiedContent(provinceId as ProvinceId, trustedRows);
+      const removed = await dbQuery('SELECT content_id FROM travel_content_quarantine WHERE province_id=?',[provinceId]);
+      const data = mergeVerifiedContent(provinceId as ProvinceId, trustedRows,
+        new Set(removed.rows.map(row=>String(row.content_id))));
       const response = json({ provinceId, data, source: trustedRows.length ? 'approved_database' : 'legacy_fallback' });
       response.headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
       return response;
     } catch (error) {
       console.warn('[content] database unavailable, using original catalog', error);
-      const response = json({ provinceId, data: provinceDetailsCatalog[provinceId as ProvinceId], source: 'legacy_fallback' });
+      // Fail closed on database outage: archived items cannot reappear.
+      const base = structuredClone(provinceDetailsCatalog[provinceId as ProvinceId]);
+      base.data.places = [];
+      base.data.cuisine = [];
+      const response = json({ provinceId, data: base, source: 'database_unavailable' });
       response.headers.set('Cache-Control', 'public, max-age=30');
       return response;
     }

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { dbQuery } from './database.js';
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
+import { archiveLegacyCatalog } from '../../src/utils/contentArchive.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 import { checkCoreSubjectSpecificity } from '../../src/utils/coreSubjectSpecificity.js';
 
@@ -189,6 +190,7 @@ function photoId(contentId:string,sourceUrl:string){
 /** All photo searches are additive to a queue. Nothing alters public cards. */
 export async function enqueueImagesForReview(options:{
   fetcher?:typeof fetch;flickrApiKey?:string;includeOpenverse?:boolean;maxItems?:number;
+  provinceId?:ProvinceId;includeLegacy?:boolean;
 }={}){
   const max=Math.max(1,Math.min(50,options.maxItems??25));
   const rows=await dbQuery(
@@ -203,8 +205,20 @@ export async function enqueueImagesForReview(options:{
      FROM travel_core_candidates WHERE status IN ('pending','ready_for_review')
      ORDER BY province_id,section LIMIT 400`,
   );
+  const activeIds=new Set(rows.rows.map(row=>String(row.content_id)));
+  const legacy=options.includeLegacy ? archiveLegacyCatalog().records.filter(row=>
+    ['places','cuisine'].includes(row.section) && 'name' in row.payload &&
+    !('image' in row.payload && row.payload.image) && !activeIds.has(row.id) &&
+    (!options.provinceId || row.provinceId===options.provinceId))
+    .map(row=>({content_id:row.id,province_id:row.provinceId,section:row.section,
+      payload_json:JSON.stringify({...row.payload,taxonomyGateVersion:2})})) : [];
+  const hidden=await dbQuery('SELECT content_id FROM travel_content_quarantine');
+  const quarantined=new Set(hidden.rows.map(row=>String(row.content_id)));
+  const candidates=[...legacy,...rows.rows].filter(row=>
+    !quarantined.has(String(row.content_id)) &&
+    (!options.provinceId || String(row.province_id)===options.provinceId));
   const summary={checked:0,newImages:0,missing:0};
-  for(const row of rows.rows){
+  for(const row of candidates){
     if(summary.checked>=max)break;
     let payload:Record<string,unknown>;
     try{payload=json(JSON.parse(String(row.payload_json)));}catch{continue;}

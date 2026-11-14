@@ -27,7 +27,7 @@ try {
       console.log('Flickr SKIPPED: requires explicit permission for commercial API use, set FLICKR_API_COMMERCIAL_APPROVED=1 only after approval.');
     const max=Number((args.find(x=>x.startsWith('--max='))??'--max=25').split('=')[1]);
     const result=await enqueueImagesForReview({
-      maxItems:max,flickrApiKey:key,includeOpenverse:args.includes('--openverse'),
+      maxItems:max,flickrApiKey:key,includeOpenverse:args.includes('--openverse'),includeLegacy:true,
     });
     console.log('IMAGE REVIEW QUEUE:',result);
     if(args.includes('--openverse'))

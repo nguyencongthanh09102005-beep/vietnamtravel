@@ -24,7 +24,8 @@ export function ProvinceDetails({ province }: { province: string }) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedItem, setSelectedItem] = useState<{ kind: DiscoveryKind; index: number } | null>(null);
   const [remote, setRemote] = useState<{ provinceId: string; data: ProvinceDetailsCatalogItem } | null>(null);
-  const current = remote?.provinceId === province ? remote.data : provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
+  // Do not show an archived legacy card before the public API responds.
+  const current = remote?.provinceId === province ? remote.data : undefined;
 
   useEffect(() => {
     setActiveTab('overview');
@@ -39,13 +40,16 @@ export function ProvinceDetails({ province }: { province: string }) {
         signal: controller.signal,
         cache: 'no-store',
       }).then(async response => {
-        if (!response.ok) return;
+        if (!response.ok) throw Error('CONTENT_API_UNAVAILABLE');
         const payload = await response.json() as { provinceId?: string; data?: ProvinceDetailsCatalogItem };
         if (!controller.signal.aborted && payload.provinceId === province && payload.data?.data) {
           setRemote({ provinceId: province, data: payload.data });
         }
       }).catch(() => {
-        // Original content remains visible when dynamic content is unavailable.
+        if (controller.signal.aborted) return;
+        // Keep the overview but not unmoderated cards while DB is unavailable.
+        const base = provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
+        if (base) setRemote({provinceId:province,data:{...base,data:{...base.data,places:[],cuisine:[]}}});
       }).finally(() => { inFlight = false; });
     };
     refresh();
@@ -61,6 +65,9 @@ export function ProvinceDetails({ province }: { province: string }) {
     };
   }, [province]);
 
+  if (!current && province in provinceDetailsCatalog) {
+    return <div className="flex h-full items-center justify-center rounded-2xl bg-white text-sm text-slate-500" role="status">Đang tải nội dung đã kiểm duyệt...</div>;
+  }
   if (!current) {
     return (
       <div className="flex h-full w-full items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-center shadow-sm">

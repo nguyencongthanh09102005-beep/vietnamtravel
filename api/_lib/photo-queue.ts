@@ -5,7 +5,7 @@ import { provincesData, type ProvinceId } from '../../src/data/provincesData.js'
 import { checkCoreSubjectSpecificity } from '../../src/utils/coreSubjectSpecificity.js';
 
 export interface ImageReviewCandidate {
-  image:string; sourceUrl:string; sourceKind:'commons'|'flickr';
+  image:string; sourceUrl:string; sourceKind:'commons'|'flickr'|'openverse';
   license:string; attribution:string; width:number; height:number;
 }
 const UA='VietnamTravel/1.0 (https://github.com/nguyencongthanh09102005-beep/vietnamtravel; source attribution)';
@@ -134,12 +134,61 @@ export async function searchFlickrImageCandidates(args:{
   }catch(error){console.warn('[photo-queue] Flickr search unavailable',String(error).slice(0,130));return [];}
 }
 
+
+/** Openverse indexes multiple openly-licensed sources.
+ * Treat search results only as untrusted REVIEW CANDIDATES. We restrict the
+ * underlying image to known Wikimedia/Flickr CDNs and require matching
+ * original landing-page domains. Do NOT automatically display or publish. */
+export async function searchOpenverseImageCandidates(args:{
+  subject:string;province:string;fetcher?:typeof fetch;limit?:number;
+}):Promise<ImageReviewCandidate[]>{
+  const query=(args.subject+' '+args.province).trim().slice(0,120);
+  if(!args.subject.trim()||query.length<5)return [];
+  const endpoint=new URL('https://api.openverse.org/v1/images/');
+  endpoint.search=new URLSearchParams({
+    q:query,page_size:'10',license_type:'commercial',mature:'false',
+    filter_dead:'true',
+  }).toString();
+  try{
+    const response=await fetchJson(endpoint,args.fetcher??fetch,['api.openverse.org']);
+    if(!Array.isArray(response.results))return [];
+    const out:ImageReviewCandidate[]=[];
+    const cap=Math.max(1,Math.min(args.limit??3,4));
+    for(const candidate of response.results.slice(0,10)){
+      const row=json(candidate);
+      const rawLicense=String(row.license??'').toLowerCase();
+      const version=String(row.license_version??'');
+      const license=rawLicense==='cc0' && (version==='1.0'||version==='')
+        ? 'CC0 1.0'
+        : ['by','by-sa'].includes(rawLicense) &&
+          ['2.0','3.0','4.0'].includes(version)
+        ? 'CC '+rawLicense.toUpperCase()+' '+version : '';
+      if(!license)continue;
+      const image=String(row.url??'');
+      const original=String(row.foreign_landing_url??'');
+      const creator=text(row.creator);
+      const width=dims(row.width),height=dims(row.height);
+      const matchesHosts=(commonsCdn(image)&&original.startsWith('https://commons.wikimedia.org/wiki/File:')) ||
+        (flickrCdn(image)&&/^https:\/\/(?:www\.)?flickr\.com\/photos\/[^/]+\/\d+\//.test(original));
+      if(!matchesHosts||!creator||!bigEnough(width,height))continue;
+      out.push({image,sourceUrl:original,sourceKind:'openverse',
+        license,attribution:creator+' · '+license+' · '+original,
+        width,height});
+      if(out.length>=cap)break;
+    }
+    return out;
+  }catch(error){
+    console.warn('[photo-queue] Openverse search unavailable',String(error).slice(0,130));
+    return [];
+  }
+}
+
 function photoId(contentId:string,sourceUrl:string){
   return 'photo_'+createHash('sha256').update(contentId+'|'+sourceUrl).digest('hex').slice(0,44);
 }
 /** All photo searches are additive to a queue. Nothing alters public cards. */
 export async function enqueueImagesForReview(options:{
-  fetcher?:typeof fetch;flickrApiKey?:string;maxItems?:number;
+  fetcher?:typeof fetch;flickrApiKey?:string;includeOpenverse?:boolean;maxItems?:number;
 }={}){
   const max=Math.max(1,Math.min(50,options.maxItems??25));
   const rows=await dbQuery(
@@ -175,7 +224,12 @@ export async function enqueueImagesForReview(options:{
       subject:payload.name,province,apiKey:options.flickrApiKey,
       fetcher:options.fetcher,limit:4,
     }) : [];
-    const combined=[...fromCommons,...fromFlickr].slice(0,5);
+    const fromOpenverse=options.includeOpenverse ? await searchOpenverseImageCandidates({
+      subject:payload.name,province,fetcher:options.fetcher,limit:3,
+    }) : [];
+    const combined=[...fromCommons,...fromFlickr,...fromOpenverse]
+      .filter((candidate,index,array)=>array.findIndex(item=>item.sourceUrl===candidate.sourceUrl)===index)
+      .slice(0,5);
     if(!combined.length)summary.missing++;
     for(const item of combined){
       const result=await dbQuery(
@@ -189,7 +243,8 @@ export async function enqueueImagesForReview(options:{
       );
       summary.newImages+=result.changes;
     }
-    if(!options.fetcher)await new Promise(resolve=>setTimeout(resolve,400));
+    if(!options.fetcher)await new Promise(resolve=>setTimeout(resolve,
+      options.includeOpenverse ? 1200 : 400));
   }
   return summary;
 }

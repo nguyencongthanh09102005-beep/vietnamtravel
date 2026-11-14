@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 import { isSpecificMapStop, type MapStop, type MappedStop } from '../../src/utils/itinerary-map.js';
 import { databaseConfigured, dbOne, dbQuery, withinRateLimit } from '../_lib/auth.js';
+import { getPriorityMapPlaces, mapQueryKey, matchesMapProvince, matchKnownMapPlace, normalizeMapName } from '../_lib/itinerary-map-priority.js';
 
 const CACHE_AGE_MS = 60 * 24 * 3600 * 1000;
 const MISS_AGE_MS = 14 * 24 * 3600 * 1000;
@@ -12,11 +12,6 @@ type GeoEntry = { lat: number | null; lon: number | null; label: string };
 const json = (body: unknown, status = 200) => Response.json(body, {
   status, headers: { 'Cache-Control': 'no-store' },
 });
-const normalize = (value: string) => value.toLocaleLowerCase('vi-VN')
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
-  .replace(/^(tinh|tp\.?|thanh pho)\s+/i, '').replace(/[^a-z0-9]+/g, ' ').trim();
-const sha = (value: string) => createHash('sha256').update(value).digest('hex');
-
 function parseInput(value: unknown): { provinceId: ProvinceId; stops: MapStop[] } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;
@@ -36,10 +31,12 @@ function parseInput(value: unknown): { provinceId: ProvinceId; stops: MapStop[] 
   return { provinceId: body.provinceId as ProvinceId, stops };
 }
 
-async function lookupPlace(title: string, province: string): Promise<GeoEntry> {
+async function lookupPlace(title: string, provinceId: ProvinceId): Promise<GeoEntry> {
   const params = new URLSearchParams({
-    q: title + ', ' + province + ', Việt Nam',
-    format: 'jsonv2', addressdetails: '1', countrycodes: 'vn', limit: '3',
+    // Old province names remain in OSM after the 2025 mergers.
+    // The result is accepted only if its address matches the chosen province.
+    q: title + ', Việt Nam',
+    format: 'jsonv2', addressdetails: '1', namedetails: '1', countrycodes: 'vn', limit: '8',
     'accept-language': 'vi',
   });
   const result = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
@@ -53,8 +50,7 @@ async function lookupPlace(title: string, province: string): Promise<GeoEntry> {
   if (!result.ok) throw new Error('MAP_GEOCODING_UNAVAILABLE');
   const entries = await result.json() as unknown;
   if (!Array.isArray(entries)) throw new Error('MAP_GEOCODING_INVALID');
-  const region = normalize(province);
-  for (const data of entries.slice(0, 3)) {
+  for (const data of entries.slice(0, 8)) {
     if (!data || typeof data !== 'object') continue;
     const item = data as Record<string, unknown>;
     const address = item.address && typeof item.address === 'object' ? item.address as Record<string, unknown> : {};
@@ -63,18 +59,26 @@ async function lookupPlace(title: string, province: string): Promise<GeoEntry> {
     const lon = Number(item.lon);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < 7 || lat > 24 || lon < 101 || lon > 118) continue;
     const addressRegion = [address.state, address.city, address.province, address.municipality, address.county, address.state_district]
-      .filter((s): s is string => typeof s === 'string').map(normalize);
-    // Reject hits outside the selected province rather than show a misleading pin.
-    if (!addressRegion.some(part => part === region || part.includes(region))) continue;
+      .filter((s): s is string => typeof s === 'string');
+    // New 2025 province names and officially merged former province names.
+    if (!matchesMapProvince(provinceId, addressRegion)) continue;
     if (typeof item.display_name !== 'string' || !item.display_name) continue;
     if (['administrative', 'city', 'state', 'county', 'country'].includes(String(item.type)) ||
         ['administrative', 'city', 'state', 'county', 'country'].includes(String(item.addresstype))) continue;
-    const firstPlaceName = normalize(item.display_name.split(',')[0]);
-    const expectedName = normalize(title);
-    // Geocoder can fall back to a province/city even when a place was not found.
-    // Require the result's own place name to overlap with the requested stop.
-    if (firstPlaceName.length < 5 ||
-        !(firstPlaceName.includes(expectedName) || (expectedName.includes(firstPlaceName) && firstPlaceName.length >= 7))) continue;
+    const names = item.namedetails && typeof item.namedetails === 'object'
+      ? Object.values(item.namedetails as Record<string, unknown>)
+        .filter((name): name is string => typeof name === 'string')
+      : [];
+    names.push(item.display_name.split(',')[0]);
+    if (typeof item.name === 'string') names.push(item.name);
+    const expected = normalizeMapName(title);
+    // Never accept a generic city result; require an overlapping proper name.
+    if (!names.some(name => {
+      const candidate = normalizeMapName(name);
+      return candidate.length >= 5 && (candidate === expected ||
+        (candidate.includes(expected) && expected.length >= 7) ||
+        (expected.includes(candidate) && candidate.length >= 7));
+    })) continue;
     return { lat, lon, label: item.display_name.slice(0, 260) };
   }
   return { lat: null, lon: null, label: '' };
@@ -96,13 +100,19 @@ export default {
       if (!await withinRateLimit(request, 'planner-map', '', 120, 3600)) {
         return json({ error: 'Đã vượt giới hạn tìm vị trí tạm thời.' }, 429);
       }
-      const provinceName = provincesData[input.provinceId].name;
       const valid = input.stops.filter(isSpecificMapStop);
-      const keys = valid.map(stop => sha(input.provinceId + '\n' + normalize(stop.title)));
+      const keys = valid.map(stop => mapQueryKey(input.provinceId, stop.title));
+      const mappedPlaces = await getPriorityMapPlaces(input.provinceId).catch(() => []);
       const now = Date.now();
       const points: MappedStop[] = [];
       const unseen: number[] = [];
       async function collect(index: number) {
+        const found = matchKnownMapPlace(valid[index].title, mappedPlaces);
+        if (found) {
+          points.push({ id: valid[index].id, lat: found.latitude,
+            lon: found.longitude, label: found.name });
+          return;
+        }
         const row = await dbOne('SELECT lat, lon, label, checked_at FROM place_geocodes WHERE query_key = ?', [keys[index]]);
         if (!row || Number(row.checked_at) <= now - (row.lat === null ? MISS_AGE_MS : CACHE_AGE_MS)) {
           unseen.push(index);
@@ -122,7 +132,7 @@ export default {
         if (lock.changes > 0) lookupIndex = unseen[0];
       }
       if (lookupIndex !== null) {
-        const result = await lookupPlace(valid[lookupIndex].title, provinceName);
+        const result = await lookupPlace(valid[lookupIndex].title, input.provinceId);
         await dbQuery(
           'INSERT INTO place_geocodes(query_key,lat,lon,label,checked_at) VALUES (?,?,?,?,?) ' +
           'ON CONFLICT(query_key) DO UPDATE SET lat=excluded.lat,lon=excluded.lon,label=excluded.label,checked_at=excluded.checked_at',

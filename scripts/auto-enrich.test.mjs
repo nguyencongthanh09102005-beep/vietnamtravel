@@ -69,26 +69,23 @@ test('publishes only image-licensed, article-linked and region-matching content'
   assert.equal(wrongPlace.approved,false,'Wrong province must never be auto-published');
 });
 
-test('verified content appears immediately in public API, but not duplicated on re-scan',async ()=>{
+test('enrichment stages pending versions without automatically publishing them',async ()=>{
   const first=await enrichSection('Thanh Hoa','places',{fetcher:fetcherFor(),force:true});
   assert.equal(first.found,1);
-  assert.equal(first.approved,1);
-  assert.equal(first.pending,0);
+  assert.equal(first.approved,0);
+  assert.equal(first.pending,1);
   const response=await contentApi.fetch(new Request('https://example.test/api/content?provinceId=Thanh%20Hoa'));
   assert.equal(response.status,200);
   const data=await response.json();
-  assert.equal(data.source,'approved_database');
-  assert.ok(data.data.data.places.some(x=>x.name===title));
-  assert.ok(data.data.data.places.find(x=>x.name===title).imageAttribution.includes('Photo contributor'));
-  assert.equal(data.data.data.cuisine.length,3);
-  const second=await enrichSection('Thanh Hoa','places',{fetcher:async()=>{throw Error('Should not fetch recently scanned sources')}});
+  assert.ok(!data.data.data.places.some(x=>x.name===title));
+  const second=await enrichSection('Thanh Hoa','places',{fetcher:async()=>{throw Error('Already scanned')}});
   assert.equal(second.skipped,true);
   const third=await enrichSection('Thanh Hoa','places',{fetcher:fetcherFor(),force:true});
   assert.equal(third.approved,0);
-  const rows=await dbQuery("SELECT COUNT(*) AS count FROM travel_content_items WHERE province_id='Thanh Hoa'");
-  assert.equal(rows.rows[0].count,1);
-  const versions=await dbQuery("SELECT current_version_id FROM travel_content_items WHERE province_id='Thanh Hoa'");
-  assert.match(String(versions.rows[0].current_version_id),/^auto_v2_/);
+  const active=await dbQuery("SELECT COUNT(*) count FROM travel_content_items WHERE province_id='Thanh Hoa'");
+  assert.equal(active.rows[0].count,0);
+  const staged=await dbQuery("SELECT COUNT(*) count FROM travel_content_versions WHERE province_id='Thanh Hoa' AND reviewed_status='pending'");
+  assert.equal(staged.rows[0].count,1);
 });
 
 test('original handwritten destination is enriched without deleting source or history',async ()=>{
@@ -130,15 +127,20 @@ test('original handwritten destination is enriched without deleting source or hi
     }]}]}});
   };
   const result=await enrichSection('Thanh Hoa','places',{fetcher,force:true});
-  assert.equal(result.approved,1);
+  assert.equal(result.approved,0);
+  assert.equal(result.pending,1);
   const response=await contentApi.fetch(new Request('https://example.test/api/content?provinceId=Thanh%20Hoa'));
   assert.equal(response.status,200);
   const data=await response.json();
-  assert.ok(data.data.data.places.find(x=>x.name==='Biển Sầm Sơn').detail.includes('bãi biển du lịch'));
+  assert.equal(data.data.data.places.find(x=>x.name==='Biển Sầm Sơn').detail,undefined,
+    'Pending candidate must not replace the original manual card');
   assert.equal(provinceDetailsCatalog['Thanh Hoa'].data.places.find(x=>x.name==='Biển Sầm Sơn').detail,
     undefined,'Original TypeScript record stays untouched');
   const active=await dbQuery('SELECT current_version_id FROM travel_content_items WHERE content_id=?',[original.id]);
-  assert.notEqual(active.rows[0].current_version_id,oldVersion);
+  assert.equal(active.rows[0].current_version_id,oldVersion);
+  const staged=await dbQuery("SELECT payload_json FROM travel_content_versions WHERE content_id=? AND reviewed_status='pending'",[original.id]);
+  assert.equal(staged.rows.length,1);
+  assert.ok(JSON.parse(String(staged.rows[0].payload_json)).detail.includes('bãi biển du lịch'));
   const history=await dbQuery('SELECT reviewed_status FROM travel_content_versions WHERE version_id=?',[oldVersion]);
   assert.equal(history.rows[0].reviewed_status,'approved','Old version retained for rollback');
 });
@@ -153,7 +155,7 @@ test('Wikipedia missing thumbnail can still recover a licensed image from articl
   assert.match(verdict.payload.imageAttribution,/Photo contributor/);
 });
 
-test('a correct-source Wikidata item without licensed photo is still visible in API',async ()=>{
+test('correct-source item without licensed photo remains pending, not public',async ()=>{
   const noImageTitle='Hồ tham quan chưa có ảnh';
   const noImageIntro='Hồ tham quan chưa có ảnh là hồ nước và điểm tham quan tại tỉnh Thanh Hóa, Việt Nam. '
     +'Nơi đây là một địa điểm có cảnh quan và hoạt động tham quan. '.repeat(5);
@@ -173,11 +175,14 @@ test('a correct-source Wikidata item without licensed photo is still visible in 
     throw new Error('Should never request Commons when there is no image');
   };
   const refreshed=await enrichSection('Thanh Hoa','places',{fetcher:src,force:true});
-  assert.equal(refreshed.approved,1);
+  assert.equal(refreshed.approved,0);
+  assert.equal(refreshed.pending,1);
   const response=await contentApi.fetch(new Request('https://example.test/api/content?provinceId=Thanh%20Hoa'));
   assert.equal(response.status,200);
   const payload=await response.json();
-  const item=payload.data.data.places.find(x=>x.name===noImageTitle);
+  assert.ok(!payload.data.data.places.some(x=>x.name===noImageTitle));
+  const staged=await dbQuery("SELECT payload_json FROM travel_content_versions WHERE province_id='Thanh Hoa' AND reviewed_status='pending'");
+  const item=staged.rows.map(row=>JSON.parse(String(row.payload_json))).find(x=>x.name===noImageTitle);
   assert.ok(item);
   assert.equal(item.image,'');
   assert.equal(item.wikidataId,'Q345678');

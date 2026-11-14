@@ -20,6 +20,8 @@ type QueuePhoto={imageId:string;contentId:string;provinceId:string;section:Secti
   license:string;attribution:string;width:number;height:number};
 type ItemVersion={versionId:string;description:string;reviewedStatus:string;sourceKind:string;
   sourceUrls:string[];sourceRef:string;createdAt:string};
+type SourceSuggestion={url:string;title:string;snippet:string;host:string;provider:string;status?:string};
+type SavedSuggestion={content_id:string;province_id:string;section:Section;source_url:string;title:string;snippet:string;source_host:string};
 type AdminJob={job_id:string;province_id:string;kind:string;state:string;
   result_json:string;error:string;created_at:string};
 type FormState={mode:'create'|'edit'|'archive';id:string;provinceId:string;section:Section;
@@ -32,7 +34,7 @@ const badge=(value:string)=>value==='published'?'bg-emerald-50 text-emerald-700'
   value==='archived'?'bg-slate-100 text-slate-600':'bg-amber-50 text-amber-700';
 const label=(value:string)=>value==='published'?'Đã xuất bản':value==='archived'?'Đã gỡ':
   value==='queued'?'Chờ chạy':value==='running'?'Đang chạy':value==='completed'?'Hoàn tất':
-  value==='failed'?'Có lỗi':value==='photos'?'Tìm ảnh':value==='sources'?'Tìm nguồn':value==='places'?'Địa điểm':'Ẩm thực';
+  value==='failed'?'Có lỗi':value==='source-bulk'?'Tìm nguồn hàng loạt':value==='photos'?'Tìm ảnh':value==='sources'?'Tìm nguồn':value==='places'?'Địa điểm':'Ẩm thực';
 const safeText=(value:unknown)=>typeof value==='string'?value:'';
 
 async function apiGet<T>(view:string,query=''):Promise<T> {
@@ -88,14 +90,21 @@ export function AdminDashboard() {
   const [fatal,setFatal]=useState('');
   const [message,setMessage]=useState('');
   const [selectedPhotos,setSelectedPhotos]=useState<Record<string,string>>({});
+  const [savedSuggestions,setSavedSuggestions]=useState<SavedSuggestion[]>([]);
+  const [foundSources,setFoundSources]=useState<SourceSuggestion[]>([]);
+  const [sourceBusy,setSourceBusy]=useState(false);
+  const [selectedVersions,setSelectedVersions]=useState<string[]>([]);
+  const [confirmBulk,setConfirmBulk]=useState(false);
+  const [confirmReviewed,setConfirmReviewed]=useState(false);
 
   const loadSummary=async()=>{const data=await apiGet<{totals:Totals;provinces:ProvinceStat[]}>('summary');
     setTotals(data.totals);setStats(data.provinces);};
   const loadItems=async(id=province)=>{const data=await apiGet<{items:Item[]}>('items',id?'&provinceId='+encodeURIComponent(id):'');setItems(data.items);};
   const loadQueue=async()=>{const data=await apiGet<{versions:QueueVersion[];photos:QueuePhoto[]}>('queue');setVersions(data.versions);setPhotos(data.photos);};
   const loadJobs=async()=>{const data=await apiGet<{jobs:AdminJob[]}>('jobs');setJobs(data.jobs);};
+  const loadSuggestions=async()=>{const result=await apiGet<{suggestions:SavedSuggestion[]}>('suggestions');setSavedSuggestions(result.suggestions);};
   const loadHistory=async()=>{const data=await apiGet<{history:typeof history}>('history');setHistory(data.history);};
-  const reload=async()=>{await Promise.all([loadSummary(),loadItems(),loadQueue(),loadJobs(),loadHistory()]);};
+  const reload=async()=>{await Promise.all([loadSummary(),loadItems(),loadQueue(),loadJobs(),loadHistory(),loadSuggestions()]);};
   useEffect(()=>{
     let active=true;
     void Promise.all([loadSummary(),loadItems('')]).then(()=>{if(active)setLoading(false);})
@@ -105,7 +114,7 @@ export function AdminDashboard() {
   useEffect(()=>{if(!fatal)void loadItems(province).catch(err=>setMessage(String(err)));},[province]);
   useEffect(()=>{
     if(fatal)return;
-    const execute=tab==='review'?loadQueue:tab==='update'?loadJobs:tab==='report'?loadHistory:loadSummary;
+    const execute=tab==='review'?async()=>{await Promise.all([loadQueue(),loadSuggestions()]);}:tab==='update'?async()=>{await Promise.all([loadJobs(),loadSuggestions()]);}:tab==='report'?loadHistory:loadSummary;
     void execute().catch(err=>setMessage(String(err)));
   },[tab]);
   useEffect(()=>{
@@ -136,20 +145,75 @@ export function AdminDashboard() {
     finally{setHistoryLoading(false);}
   };
   const openEdit=(item:Item)=>{
+    setFoundSources(savedSuggestions.filter(x=>x.content_id===item.id).map(x=>({url:x.source_url,title:x.title,snippet:x.snippet,host:x.source_host,provider:'saved'})));
     setDraft({mode:'edit',id:item.id,provinceId:item.provinceId,section:item.section,
       name:item.name,description:item.description,detail:item.detail,
       sourceOne:item.sourceUrls[0]??'',sourceTwo:item.sourceUrls[1]??'',reason:''});
   };
   const openVersionEdit=(item:QueueVersion)=>{
+    setFoundSources(savedSuggestions.filter(x=>x.content_id===item.contentId).map(x=>({url:x.source_url,title:x.title,snippet:x.snippet,host:x.source_host,provider:'saved'})));
     setDraft({mode:'edit',id:item.contentId,provinceId:item.provinceId,section:item.section,
       name:safeText(item.payload.name),description:safeText(item.payload.description),
       detail:safeText(item.payload.detail),
       sourceOne:Array.isArray(item.payload.sourceUrls)?safeText(item.payload.sourceUrls[0]):item.sourceRef,
       sourceTwo:Array.isArray(item.payload.sourceUrls)?safeText(item.payload.sourceUrls[1]):'',reason:''});
   };
+  const searchSources=async()=>{
+    if(!draft||sourceBusy||draft.mode==='archive')return;
+    setSourceBusy(true);setMessage('');setFoundSources([]);
+    try {
+      const data=await apiPost<{suggestions:SourceSuggestion[];providerConfigured:boolean;errors:string[]}>({
+        action:'source-search',contentId:draft.id,name:draft.name,
+        provinceId:draft.provinceId,section:draft.section,
+      });
+      setFoundSources(data.suggestions);
+      setMessage(data.suggestions.length
+        ? 'Đã tìm thấy '+data.suggestions.length+' nguồn gợi ý. Hãy mở bài gốc để kiểm tra rồi chọn.'
+        : (data.errors[0]??'Chưa có nguồn phù hợp; bạn vẫn có thể nhập URL thủ công.'));
+    }catch(error){setMessage(error instanceof Error?error.message:String(error));}
+    finally{setSourceBusy(false);}
+  };
+  const applySuggestion=(value:SourceSuggestion)=>{
+    setDraft(previous=>{
+      if(!previous)return previous;
+      const host=(url:string)=>{try{return new URL(url).hostname.replace(/^www\./,'');}catch{return '';}};
+      if(previous.sourceOne===value.url||previous.sourceTwo===value.url)return previous;
+      if(!previous.sourceOne)return {...previous,sourceOne:value.url};
+      if(!previous.sourceTwo&&host(previous.sourceOne)!==host(value.url))return {...previous,sourceTwo:value.url};
+      setMessage('Hai ô nguồn đã đầy hoặc trùng tổ chức. Bạn có thể thay trực tiếp trong ô URL.');
+      return previous;
+    });
+  };
+  const eligible=(v:QueueVersion)=>{
+    const links=Array.isArray(v.payload.sourceUrls)?v.payload.sourceUrls.filter(x=>typeof x==='string') as string[]:[];
+    const hosts=new Set(links.map(url=>{
+      try{const host=new URL(url).hostname.replace(/^(www|m)\./,'');return /(^|\.)(wikipedia|wikidata|wikimedia|wikivoyage)\.org$/.test(host)?'wikimedia-group':host;}
+      catch{return '';}
+    }).filter(Boolean));
+    const image=safeText(v.payload.image);
+    const license=safeText(v.payload.imageLicense);
+    return hosts.size>=2&&(!image||(
+      /^(CC0(?: 1\.0)?|CC BY(?: [234]\.0)?|CC BY-SA(?: [234]\.0)?|PUBLIC DOMAIN)$/i.test(license)
+      && !!v.payload.imageAttribution && !!v.payload.imageCreditUrl));
+  };
+  const approveSelected=async()=>{
+    if(!confirmReviewed||!selectedVersions.length||busy)return;
+    setBusy(true);setMessage('');
+    try {
+      const data=await apiPost<{approved:number;skipped:number;results:Array<{reason:string}>}>({
+        action:'approve-many',versionIds:selectedVersions.slice(0,20),confirmHumanReview:true,
+      });
+      setMessage('Đã duyệt '+data.approved+' mục. Bỏ qua '+data.skipped+' mục không đủ điều kiện.'+
+        (data.skipped?' '+data.results.filter(x=>x.reason!=='published').map(x=>x.reason).slice(0,2).join('; '):''));
+      setSelectedVersions([]);setConfirmBulk(false);setConfirmReviewed(false);
+      await reload();
+    }catch(error){setMessage(error instanceof Error?error.message:String(error));}
+    finally{setBusy(false);}
+  };
   const mutate=async(body:Record<string,unknown>,success:string)=>{
     setBusy(true);setMessage('');
-    try {await apiPost(body);setDraft(null);await reload();setMessage(success);}
+    try {const result=await apiPost<{state?:string;total?:number}>(body);setDraft(null);await reload();
+      setMessage(result.state==='empty'?'Không có mục thiếu nguồn trong phạm vi đã chọn.':success+(result.total?' ('+result.total+' mục)':''));}
     catch(err){setMessage(err instanceof Error?err.message:String(err));}
     finally {setBusy(false);}
   };
@@ -222,7 +286,7 @@ export function AdminDashboard() {
         <div className="mb-4 flex items-center justify-between gap-2">
           <div><h2 className="text-base font-semibold">Quản lý nội dung</h2>
             <p className="mt-1 text-xs text-slate-500">Địa điểm & ẩm thực · Thêm, sửa, gỡ và khôi phục</p></div>
-          <button type="button" onClick={()=>setDraft({...emptyForm,provinceId:province||'Ha Noi'})}
+          <button type="button" onClick={()=>{setFoundSources([]);setDraft({...emptyForm,provinceId:province||'Ha Noi'});}}
             className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-semibold text-white hover:bg-emerald-800 sm:text-sm">
             <Plus className="h-4 w-4"/> Thêm mới
           </button>
@@ -279,14 +343,28 @@ export function AdminDashboard() {
       {tab==='review'&&<section className="mt-6 space-y-5">
         <div><h2 className="font-semibold">Hàng chờ duyệt</h2>
           <p className="mt-1 text-xs text-slate-500">Kiểm tra đủ hai nguồn độc lập và giấy phép ảnh trước khi công bố.</p></div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Nội dung ({versions.length})</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={()=>setSelectedVersions(versions.filter(eligible).slice(0,20).map(v=>v.versionId))}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Chọn tất cả đủ điều kiện</button>
+            <button type="button" disabled={!selectedVersions.length||busy} onClick={()=>{setConfirmBulk(true);setConfirmReviewed(false);}}
+              className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">
+              Duyệt tất cả đã chọn ({selectedVersions.length})
+            </button>
+          </div>
           <button type="button" onClick={()=>void loadQueue()} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Tải lại hàng duyệt"><RefreshCw className="h-4 w-4"/></button>
         </div>
         {!versions.length&&<p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">Không có nội dung mới đang chờ duyệt.</p>}
+        <p className="text-xs text-slate-500">Chỉ chọn tối đa 20 mục/lần đã có ít nhất hai nguồn độc lập và ảnh hợp lệ nếu sử dụng. Không duyệt hàng loạt ảnh vì phải xem đúng chủ thể từng ảnh.</p>
         {versions.map(v=><article key={v.versionId} className="rounded-2xl border border-slate-200 p-4">
           <div className="flex items-start justify-between gap-2">
-            <div><h4 className="text-sm font-semibold">{safeText(v.payload.name)||'Chưa có tên'}</h4>
+            <label className="flex shrink-0 items-center gap-2 text-xs text-slate-500" title={eligible(v)?'Chọn để duyệt hàng loạt':'Thiếu nguồn hoặc giấy phép ảnh'}>
+              <input type="checkbox" disabled={!eligible(v)} checked={selectedVersions.includes(v.versionId)}
+                onChange={e=>setSelectedVersions(prev=>e.target.checked?[...prev,v.versionId].slice(0,20):prev.filter(id=>id!==v.versionId))}
+                aria-label={'Chọn '+safeText(v.payload.name)+' để duyệt'} className="accent-emerald-700"/> Chọn
+            </label>
+            <div className="flex-1"><h4 className="text-sm font-semibold">{safeText(v.payload.name)||'Chưa có tên'}</h4>
               <p className="mt-1 text-xs text-slate-500">{provincesData[v.provinceId as keyof typeof provincesData]?.name} · {label(v.section)}</p></div>
             <span className="rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-700">Chờ duyệt</span>
           </div>
@@ -333,7 +411,12 @@ export function AdminDashboard() {
       </section>}
 
       {tab==='update'&&<section className="mt-6 space-y-4">
-        <h2 className="text-base font-semibold">Cập nhật theo tỉnh</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold">Cập nhật theo tỉnh</h2>
+          <button type="button" disabled={busy} onClick={()=>void mutate({action:'source-bulk',provinceId:province||'*'},'Đã tạo hàng đợi tìm nguồn')}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-40">
+            <Search className="h-4 w-4"/> Tìm nguồn tất cả
+          </button></div>
+        <p className="text-xs text-amber-800">Nếu chưa chọn tỉnh, nút sẽ quét nội dung thiếu nguồn trên cả 34 tỉnh. Nguồn chỉ là gợi ý, không tự xuất bản.</p>
         <p className="text-sm text-slate-500">Yêu cầu được xếp hàng, không giữ trang web chờ Openverse hoặc Overpass.</p>
         <select aria-label="Tỉnh cần cập nhật" value={province} onChange={e=>setProvince(e.target.value)}
           className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm sm:max-w-sm">
@@ -359,6 +442,16 @@ export function AdminDashboard() {
             <p className="mt-1 text-xs text-slate-500">{job.error||safeText(job.result_json)}</p></div>
           <span className={'rounded-full px-2 py-1 text-xs '+(job.state==='failed'?'bg-rose-50 text-rose-700':job.state==='completed'?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600')}>{label(job.state)}</span>
         </div>)}
+        <h3 className="pt-4 text-sm font-semibold">Nguồn gợi ý tìm được ({savedSuggestions.length})</h3>
+        <p className="text-xs text-slate-500">Nguồn gợi ý chưa được xác minh. Mở từng bài, đối chiếu thông tin rồi chọn đưa vào bản nháp.</p>
+        <div className="max-h-72 space-y-2 overflow-y-auto">
+          {savedSuggestions.slice(0,80).map(x=><div key={x.content_id+x.source_url} className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 p-3">
+            <div className="min-w-0"><p className="truncate text-xs font-semibold">{x.title||x.source_host}</p>
+              <a href={x.source_url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 underline">{x.source_host}</a></div>
+            <button type="button" onClick={()=>{const item=items.find(item=>item.id===x.content_id);if(item){openEdit(item);setFoundSources(savedSuggestions.filter(q=>q.content_id===item.id).map(q=>({url:q.source_url,title:q.title,snippet:q.snippet,host:q.source_host,provider:'saved'})));}else setMessage('Chọn tỉnh và mở bản ghi để kiểm tra nguồn.');}}
+              className="shrink-0 rounded-lg border px-2 py-1 text-xs font-semibold">Dùng nguồn</button>
+          </div>)}
+        </div>
       </section>}
 
       {tab==='report'&&<section className="mt-6">
@@ -390,6 +483,25 @@ export function AdminDashboard() {
       </section>}
     </div>
 
+    {confirmBulk&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="presentation" onClick={()=>setConfirmBulk(false)}>
+      <section role="dialog" aria-modal="true" aria-label="Xác nhận duyệt nhiều nội dung"
+        onClick={e=>e.stopPropagation()} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h2 className="text-lg font-bold">Duyệt tất cả đã chọn?</h2>
+        <p className="mt-2 text-sm text-slate-600">Bạn đang chọn {selectedVersions.length} nội dung. Hệ thống kiểm tra lại nguồn, trạng thái và bản quyền ảnh. Nội dung không đạt sẽ được bỏ qua.</p>
+        <div className="mt-3 max-h-40 overflow-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
+          {versions.filter(v=>selectedVersions.includes(v.versionId)).map(v=><p key={v.versionId} className="py-1">{safeText(v.payload.name)}</p>)}
+        </div>
+        <label className="mt-4 flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={confirmReviewed} onChange={e=>setConfirmReviewed(e.target.checked)} className="mt-1 accent-emerald-700"/>
+          Tôi đã mở và đối chiếu nguồn, nội dung của từng mục được chọn; chấp nhận xuất bản các mục hợp lệ.
+        </label>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={()=>setConfirmBulk(false)} className="rounded-xl border px-3 py-2 text-sm">Hủy</button>
+          <button type="button" disabled={!confirmReviewed||busy} onClick={()=>void approveSelected()}
+            className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">Xác nhận duyệt</button>
+        </div>
+      </section>
+    </div>}
     {historyItem&&<div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" role="presentation" onClick={()=>setHistoryItem(null)}>
       <section role="dialog" aria-modal="true" aria-label="Lịch sử phiên bản" onClick={e=>e.stopPropagation()}
         className="h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-2xl sm:p-7">
@@ -448,7 +560,26 @@ export function AdminDashboard() {
                 onChange={e=>setDraft(x=>x?{...x,[field.key]:e.target.value}:x)}
                 className="mt-1 w-full resize-y rounded-xl border border-slate-200 p-3 text-sm focus:border-emerald-600 focus:outline-none"/>
             </label>)}
-          <p className="rounded-xl bg-emerald-50 p-3 text-xs text-emerald-900">Cần hai nguồn thông tin độc lập. Ảnh được chọn tại tab Duyệt sau khi kiểm tra giấy phép.</p>
+          <div className="rounded-xl bg-emerald-50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-emerald-900">Bạn không cần tự tìm URL: dùng nút này để nhận gợi ý, sau đó kiểm tra bài gốc.</p>
+              <button type="button" disabled={sourceBusy||!draft.name.trim()} onClick={()=>void searchSources()}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">
+                {sourceBusy?<LoaderCircle className="h-4 w-4 animate-spin"/>:<Search className="h-4 w-4"/>} AI tìm nguồn
+              </button>
+            </div>
+            {foundSources.length>0&&<div className="mt-3 space-y-2">
+              {foundSources.map(value=><div key={value.url} className="rounded-lg border border-emerald-100 bg-white p-3">
+                <p className="text-xs font-semibold">{value.title}</p>
+                <p className="mt-1 text-xs text-slate-500">{value.snippet}</p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <a target="_blank" rel="noopener noreferrer" href={value.url} className="truncate text-xs text-emerald-700 underline">{value.host} · Mở nguồn</a>
+                  <button type="button" onClick={()=>applySuggestion(value)} className="shrink-0 rounded-lg border px-2 py-1 text-xs font-semibold">Chọn nguồn</button>
+                </div>
+              </div>)}
+            </div>}
+            <p className="mt-2 text-xs text-emerald-900">Kết quả tìm kiếm không chứng minh nguồn chính xác. Vẫn cho phép nhập URL thủ công nếu cần.</p>
+          </div>
           <label className="block text-xs font-semibold">URL nguồn 1
             <input type="url" value={draft.sourceOne} onChange={e=>setDraft(x=>x?{...x,sourceOne:e.target.value}:x)}
               placeholder="https://..." className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-sm"/></label>

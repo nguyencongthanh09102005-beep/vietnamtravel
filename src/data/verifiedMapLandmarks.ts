@@ -30,5 +30,10 @@ export const REVIEWED_MAP_LANDMARKS: Partial<Record<ProvinceId, readonly Reviewe
       latitude: 20.89087, longitude: 104.68654,
       sourceUrl: 'https://en-ie.topographic-map.com/map-zfcptj/%C4%90%E1%BB%93i-Ch%C3%A8-Tr%C3%A1i-Tim/',
     },
+    {
+      name: 'Ngũ Động Bản Ôn',
+      latitude: 20.8731591, longitude: 104.7117465,
+      sourceUrl: 'https://steller.co/p/ng%25C5%25A9-%25C4%2591%25E1%25BB%2599ng-b%25E1%25BA%25A3n-3qa4ctpP3wapTjvVxqKMRrX',
+    },
   ],
 };

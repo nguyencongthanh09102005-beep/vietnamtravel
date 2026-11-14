@@ -29,7 +29,7 @@ test('geocode query hashes are accent-insensitive but partitioned by province', 
 test('reviewed Mộc Châu landmarks are real named locations with traceable sources', async () => {
   const { REVIEWED_MAP_LANDMARKS } = await import('../.api-test-dist/src/data/verifiedMapLandmarks.js');
   const sonLa = REVIEWED_MAP_LANDMARKS['Son La'];
-  assert.equal(sonLa.length, 3);
+  assert.equal(sonLa.length, 4);
   assert.equal(new Set(sonLa.map(x => normalizeMapName(x.name))).size, 3);
   assert.ok(sonLa.every(x => x.latitude >= 20 && x.latitude <= 22 &&
     x.longitude >= 104 && x.longitude <= 106 && x.sourceUrl.startsWith('https://')));

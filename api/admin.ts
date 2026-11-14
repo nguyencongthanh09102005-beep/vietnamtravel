@@ -5,6 +5,7 @@ import { provincesData, type ProvinceId } from '../src/data/provincesData.js';
 import { normalizedSubjectKey } from '../src/utils/contentQuality.js';
 import { reviewPhotoImage } from './_lib/photo-review.js';
 import { generateGeminiText } from './_lib/gemini.js';
+import { findSourceCandidates, saveSourceSuggestions,sourceGroup } from './_lib/source-finder.js';
 
 type Section = 'places' | 'cuisine';
 type Body = Record<string,unknown>;
@@ -24,7 +25,7 @@ function sources(value:unknown):string[] {
 function independentlySourced(links:string[]):boolean {
   try { return new Set(links.map(x=>{
     const host=new URL(x).hostname.replace(/^(www|m)\./,'').toLowerCase();
-    return /(^|\.)(wikipedia|wikidata|wikimedia)\.org$/.test(host)?'wikimedia-group':host;
+    return sourceGroup(host);
   })).size>=2; }
   catch { return false; }
 }
@@ -275,6 +276,66 @@ async function composeDescription(body:Body) {
   if(cleaned.length<35)return json({error:'Kết quả AI không đạt yêu cầu, vui lòng tự chỉnh sửa.'},503);
   return json({description:cleaned,status:'pending_editorial_review'});
 }
+async function searchSources(body:Body,actor:string) {
+  const name=text(body.name,150),provinceId=text(body.provinceId,100),section=text(body.section,30);
+  const contentId=text(body.contentId,200);
+  if(name.length<2||!validProvince(provinceId)||!['places','cuisine'].includes(section))
+    return json({error:'Cần tên, tỉnh và loại nội dung hợp lệ'},400);
+  const result=await findSourceCandidates({name,provinceId,section:section as Section});
+  if(contentId){
+    const original=legacy.get(contentId),active=await approvedContent(contentId);
+    const pending=await dbOne('SELECT content_id,province_id,section FROM travel_content_versions WHERE content_id=? ORDER BY created_at DESC LIMIT 1',[contentId]);
+    if((original&&original.provinceId===provinceId&&original.section===section) ||
+      (active&&active.province_id===provinceId&&active.section===section) ||
+      (pending&&pending.province_id===provinceId&&pending.section===section)){
+      await saveSourceSuggestions(contentId,provinceId,section,result.suggestions);
+    }
+  }
+  await audit(actor,'source_search',contentId,'',name);
+  return json(result);
+}
+async function enqueueAllSources(body:Body,actor:string) {
+  const provinceId=text(body.provinceId,100);
+  if(provinceId!=='*'&&!validProvince(provinceId))return json({error:'Tỉnh không hợp lệ'},400);
+  const existing=await dbOne("SELECT job_id FROM travel_admin_jobs WHERE kind='source-bulk' AND province_id=? AND state IN ('queued','running')",[provinceId]);
+  if(existing)return json({ok:true,state:'already_queued',jobId:existing.job_id});
+  const items=await listItems(provinceId==='*'?'':provinceId);
+  const targets=items.filter(item=>item.status!=='archived' &&
+    new Set(item.sourceUrls.filter(url=>url.startsWith('https://')).map(url=>sourceGroup(new URL(url).hostname))).size<2)
+    .map(item=>({id:item.id,provinceId:item.provinceId,section:item.section,name:item.name}))
+    .slice(0,400);
+  if(!targets.length)return json({ok:true,state:'empty',total:0});
+  const jobId=randomUUID(),now=new Date().toISOString();
+  await dbQuery("INSERT INTO travel_admin_jobs(job_id,province_id,kind,requested_by,result_json,created_at) VALUES (?,?,?,?,?,?)",
+    [jobId,provinceId,'source-bulk',actor,JSON.stringify({targets,cursor:0,found:0,empty:0,total:targets.length}),now]);
+  await audit(actor,'enqueue_source_bulk','','',provinceId+':'+targets.length);
+  return json({ok:true,state:'queued',jobId,total:targets.length});
+}
+async function approveMany(body:Body,actor:string) {
+  const ids=body.versionIds;
+  if(body.confirmHumanReview!==true || !Array.isArray(ids)||ids.length<1||ids.length>20 ||
+    ids.some(id=>typeof id!=='string'||!validId(id))||new Set(ids).size!==ids.length)
+    return json({error:'Phải xác nhận đã kiểm tra từng mục; tối đa 20 phiên bản một lần.'},400);
+  const results:{versionId:string;ok:boolean;reason:string}[]=[];
+  for(const versionId of ids as string[]){
+    const version=await dbOne('SELECT payload_json FROM travel_content_versions WHERE version_id=? AND reviewed_status=?',[versionId,'pending']);
+    if(!version){results.push({versionId,ok:false,reason:'Không còn chờ duyệt'});continue;}
+    const payload=bodyObject(JSON.parse(String(version.payload_json)));
+    const urls=sources(payload.sourceUrls);
+    if(!independentlySourced(urls)){
+      results.push({versionId,ok:false,reason:'Thiếu 2 nguồn độc lập'});continue;
+    }
+    const photo=text(payload.image,2000);
+    if(photo&&(!allowedLicense(text(payload.imageLicense,100))||!text(payload.imageAttribution,600)||!text(payload.imageCreditUrl,600))){
+      results.push({versionId,ok:false,reason:'Ảnh thiếu giấy phép hoặc ghi công'});continue;
+    }
+    const response=await moderate({versionId,decision:'approve'},actor);
+    const result=await response.json() as {error?:string};
+    results.push({versionId,ok:response.ok,reason:response.ok?'published':result.error??'Lỗi duyệt'});
+  }
+  await audit(actor,'bulk_review','','','success:'+results.filter(x=>x.ok).length+'/'+ids.length);
+  return json({ok:true,approved:results.filter(x=>x.ok).length,skipped:results.filter(x=>!x.ok).length,results});
+}
 async function enqueueJob(body:Body,actor:string) {
   const provinceId=text(body.provinceId,100),kind=text(body.kind,20);
   if(!validProvince(provinceId)||!['photos','sources'].includes(kind))return json({error:'Tỉnh hoặc loại tác vụ không hợp lệ'},400);
@@ -313,6 +374,7 @@ export default {
             sourceRef:String(row.source_ref??''),createdAt:String(row.created_at)}))});
         }
         if(view==='queue')return json(await reviewQueue());
+        if(view==='suggestions')return json({suggestions:(await dbQuery('SELECT * FROM travel_content_source_suggestions WHERE review_status=? ORDER BY created_at DESC LIMIT 400',['suggested'])).rows});
         if(view==='jobs')return json({jobs:(await dbQuery('SELECT * FROM travel_admin_jobs ORDER BY created_at DESC LIMIT 60')).rows});
         if(view==='history')return json({history:(await dbQuery('SELECT * FROM travel_admin_audit ORDER BY created_at DESC LIMIT 60')).rows});
         return json({error:'View không hợp lệ'},400);
@@ -332,6 +394,9 @@ export default {
       if(action==='archive'||action==='unarchive')return toggleArchive(body,session.user.id);
       if(action==='photo')return reviewPhoto(body,session.user.id);
       if(action==='enqueue')return enqueueJob(body,session.user.id);
+      if(action==='source-search')return searchSources(body,session.user.id);
+      if(action==='source-bulk')return enqueueAllSources(body,session.user.id);
+      if(action==='approve-many')return approveMany(body,session.user.id);
       if(action==='compose')return composeDescription(body);
       return json({error:'Thao tác không hỗ trợ'},400);
     } catch(error) {

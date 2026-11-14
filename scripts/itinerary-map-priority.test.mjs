@@ -96,3 +96,50 @@ test('grounded AI rejects hallucinated or duplicate IDs and replaces invented la
     ...raw, schedule: [{ day: 1, stops: [stop('d1s1', stablePlaceId('Ha Noi', 'Thác Dải Yếm'))] }],
   }, request, places), null);
 });
+
+test('Mộc Châu end-to-end grounding contract yields only true map pins even if external maps unavailable', async () => {
+  const { normalizeGroundedItinerary } = await import('../.api-test-dist/api/_lib/grounded-itinerary.js');
+  const { stablePlaceId, pinForGroundedStop } = await import('../.api-test-dist/api/_lib/itinerary-map-priority.js');
+  const { parseRequest, validateStoredPlan } = await import('../.api-test-dist/src/utils/itinerary.js');
+  const request = parseRequest({
+    provinceId: 'Son La', days: 1, partySize: 2, totalBudgetVnd: 2500000, style: 'nature',
+    includeArrivalTransport: false, preferences: { notes: 'Thích Mộc Châu' },
+  });
+  const places = [
+    'Thác Dải Yếm', 'Cầu kính Bạch Long', 'Đồi Chè Trái Tim', 'Ngũ Động Bản Ôn',
+  ].map((name, index) => ({
+    name, id: stablePlaceId('Son La', name),
+    latitude: 20.8 + index * 0.01, longitude: 104.6 + index * 0.01,
+    source: 'reviewed_reference',
+  }));
+  const aiJson = {
+    title: 'Mộc Châu', warnings: ['Chi phí ước tính'],
+    schedule: [{
+      day: 1,
+      stops: places.map((place, i) => ({
+        id: 'd1s' + (i + 1), placeId: place.id,
+        title: 'Quán ăn bình dân Mộc Châu', // malicious / hallucinated AI title ignored
+        period: i === 0 ? 'morning' : i === 1 ? 'noon' : i === 2 ? 'afternoon' : 'evening',
+        startTime: ['08:00', '11:00', '14:00', '17:00'][i],
+        description: 'Tham quan và gợi ý đặc sản gần địa điểm', estimatedCostVnd: 65000,
+      })),
+    }],
+  };
+  const plan = normalizeGroundedItinerary(aiJson, request, places);
+  assert.ok(plan);
+  const savedAndLoaded = validateStoredPlan(JSON.parse(JSON.stringify(plan)));
+  const pins = savedAndLoaded.schedule[0].stops.map(stop => pinForGroundedStop(stop, places));
+  assert.equal(pins.length, 4);
+  assert.ok(pins.every(pin => pin !== null));
+  assert.deepEqual(pins.map(x => x.label), places.map(x => x.name));
+  assert.equal(savedAndLoaded.schedule[0].stops.some(x => x.title.includes('Quán ăn bình dân')), false);
+  const spoofed = { ...aiJson, schedule: [{ day: 1, stops: [
+    { ...aiJson.schedule[0].stops[0], placeId: stablePlaceId('Ha Noi', 'Thác Dải Yếm') },
+    ...aiJson.schedule[0].stops.slice(1),
+  ] }] };
+  assert.equal(normalizeGroundedItinerary(spoofed, request, places), null);
+  // No Nominatim/Overpass request is used by this map-first path.
+  assert.equal(pinForGroundedStop({
+    id: 'invalid', placeId: stablePlaceId('Ha Noi', 'Thác Dải Yếm'),
+  }, places), null);
+});

@@ -23,7 +23,8 @@ export function normalizeGroundedItinerary(
   for (let index = 0; index < request.days; index++) {
     const day = raw.schedule[index];
     if (!object(day) || day.day !== index + 1 || !Array.isArray(day.stops) ||
-      day.stops.length < 1 || day.stops.length > Math.min(12, available.length)) return null;
+      day.stops.length < Math.min(2, available.length) ||
+      day.stops.length > Math.min(5, available.length)) return null;
     const used = new Set<string>();
     const stops: Record<string, unknown>[] = [];
     for (const row of day.stops) {

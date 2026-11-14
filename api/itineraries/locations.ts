@@ -1,7 +1,7 @@
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 import { isSpecificMapStop, type MapStop, type MappedStop } from '../../src/utils/itinerary-map.js';
 import { databaseConfigured, dbOne, dbQuery, withinRateLimit } from '../_lib/auth.js';
-import { getPriorityMapPlaces, mapQueryKey, matchesMapProvince, matchKnownMapPlace, matchKnownMapPlaceById, normalizeMapName } from '../_lib/itinerary-map-priority.js';
+import { getPriorityMapPlaces, mapQueryKey, matchesMapProvince, matchKnownMapPlace, pinForGroundedStop, normalizeMapName } from '../_lib/itinerary-map-priority.js';
 
 const CACHE_AGE_MS = 60 * 24 * 3600 * 1000;
 const MISS_AGE_MS = 6 * 3600 * 1000;
@@ -114,15 +114,17 @@ export default {
         const stop = valid[index];
         // New AI-generated plans carry an authority-checked placeId. Never
         // fall back to guessing by title if the ID is unknown/out of province.
-        const known = stop.placeId
-          ? matchKnownMapPlaceById(stop.placeId, mappedPlaces)
-          : matchKnownMapPlace(stop.title, mappedPlaces);
+        if (stop.placeId) {
+          const pin = pinForGroundedStop(stop, mappedPlaces);
+          if (pin) points.push(pin);
+          return;
+        }
+        const known = matchKnownMapPlace(stop.title, mappedPlaces);
         if (known) {
           points.push({ id: stop.id, lat: known.latitude,
             lon: known.longitude, label: known.name });
           return;
         }
-        if (stop.placeId) return;
         // Name-based geocoding remains only for pre-existing/manual plans.
         const row = await dbOne('SELECT lat, lon, label, checked_at FROM place_geocodes WHERE query_key = ?', [keys[index]]);
         if (!row || Number(row.checked_at) <= now - (row.lat === null ? MISS_AGE_MS : CACHE_AGE_MS)) {

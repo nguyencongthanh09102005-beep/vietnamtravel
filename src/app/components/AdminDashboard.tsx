@@ -444,7 +444,7 @@ export function AdminDashboard() {
         {!jobs.length&&<p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">Chưa có yêu cầu cập nhật.</p>}
         {jobs.map(job=><div key={job.job_id} className="flex items-start gap-3 border-b border-slate-100 py-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100"><Clock3 className="h-4 w-4 text-slate-500"/></div>
-          <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{label(job.kind)} · {provincesData[job.province_id as keyof typeof provincesData]?.name}</p>
+          <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{job.kind==='sources'&&job.result_json.includes('"mode":"bulk"')?'Tìm nguồn tất cả':label(job.kind)} · {job.province_id==='*'?'34 tỉnh/thành':provincesData[job.province_id as keyof typeof provincesData]?.name}</p>
             <p className="mt-1 text-xs text-slate-500">{job.error||safeText(job.result_json)}</p></div>
           <div className="flex flex-col items-end gap-1">
             <span className={'rounded-full px-2 py-1 text-xs '+(job.state==='failed'?'bg-rose-50 text-rose-700':job.state==='completed'?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600')}>{job.error==='CANCELLED_BY_ADMIN'?'Đã hủy':label(job.state)}</span>

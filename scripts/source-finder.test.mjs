@@ -60,7 +60,7 @@ test('bulk source worker processes a bounded item and only queues suggestions',a
   const now=new Date().toISOString();
   const task={id:'legacy_food_pending',provinceId:'Son La',section:'cuisine',name};
   await dbQuery("INSERT INTO travel_admin_jobs(job_id,province_id,kind,requested_by,result_json,created_at) VALUES (?,?,?,?,?,?)",
-    ['bulk-test','*','source-bulk','admin',JSON.stringify({targets:[task],cursor:0,found:0,empty:0,total:1}),now]);
+    ['bulk-test','*','sources','admin',JSON.stringify({mode:'bulk',targets:[task],cursor:0,found:0,empty:0,total:1}),now]);
   const result=await processNextAdminJob();
   assert.equal(result.state,'completed');
   const saved=await dbQuery('SELECT source_url FROM travel_content_source_suggestions WHERE content_id=?',[task.id]);

@@ -298,7 +298,7 @@ async function searchSources(body:Body,actor:string) {
 async function enqueueAllSources(body:Body,actor:string) {
   const provinceId=text(body.provinceId,100);
   if(provinceId!=='*'&&!validProvince(provinceId))return json({error:'Tỉnh không hợp lệ'},400);
-  const existing=await dbOne("SELECT job_id FROM travel_admin_jobs WHERE kind='source-bulk' AND province_id=? AND state IN ('queued','running')",[provinceId]);
+  const existing=await dbOne("SELECT job_id FROM travel_admin_jobs WHERE kind='sources' AND province_id=? AND state IN ('queued','running') AND json_extract(result_json,'$.mode')='bulk'",[provinceId]);
   if(existing)return json({ok:true,state:'already_queued',jobId:existing.job_id});
   const items=await listItems(provinceId==='*'?'':provinceId);
   const targets=items.filter(item=>item.status!=='archived' &&
@@ -308,7 +308,7 @@ async function enqueueAllSources(body:Body,actor:string) {
   if(!targets.length)return json({ok:true,state:'empty',total:0});
   const jobId=randomUUID(),now=new Date().toISOString();
   await dbQuery("INSERT INTO travel_admin_jobs(job_id,province_id,kind,requested_by,result_json,created_at) VALUES (?,?,?,?,?,?)",
-    [jobId,provinceId,'source-bulk',actor,JSON.stringify({targets,cursor:0,found:0,empty:0,total:targets.length}),now]);
+    [jobId,provinceId,'sources',actor,JSON.stringify({mode:'bulk',targets,cursor:0,found:0,empty:0,total:targets.length}),now]);
   await audit(actor,'enqueue_source_bulk','','',provinceId+':'+targets.length);
   return json({ok:true,state:'queued',jobId,total:targets.length});
 }

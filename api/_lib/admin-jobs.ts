@@ -16,10 +16,10 @@ export async function processNextAdminJob() {
   const claim=await dbQuery("UPDATE travel_admin_jobs SET state='running',attempts=attempts+1,started_at=? WHERE job_id=? AND state='queued'",
     [new Date().toISOString(),jobId]);
   if(!claim.changes)return {state:'claimed_elsewhere'};
-  let checkpoint:{stage?:string;offset?:number;checked?:number;added?:number;missing?:number}={};
+  let checkpoint:{mode?:string;stage?:string;offset?:number;checked?:number;added?:number;missing?:number}={};
   try { checkpoint=JSON.parse(String(row.result_json??'{}')); }catch {checkpoint={};}
   try {
-    if(kind==='source-bulk') {
+    if(kind==='sources' && checkpoint.mode==='bulk') {
       const parsed=JSON.parse(String(row.result_json??'{}')) as {
         targets?:Array<{id:string;provinceId:ProvinceId;section:'places'|'cuisine';name:string}>;
         cursor?:number;found?:number;empty?:number;total?:number;

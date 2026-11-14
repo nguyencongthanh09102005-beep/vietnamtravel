@@ -199,8 +199,7 @@ export async function enqueueImagesForReview(options:{
     `SELECT i.content_id,i.province_id,i.section,v.payload_json
      FROM travel_content_items i JOIN travel_content_versions v
      ON v.version_id=i.current_version_id
-     WHERE i.current_version_id LIKE 'auto_v2_%'
-       AND v.reviewed_status='approved' AND i.section IN ('places','cuisine')
+     WHERE v.reviewed_status='approved' AND i.section IN ('places','cuisine')
      UNION ALL
      SELECT candidate_id AS content_id,province_id,section,
        json_object('name',name,'image',image_url,'taxonomyGateVersion',2) AS payload_json
@@ -226,7 +225,7 @@ export async function enqueueImagesForReview(options:{
     summary.visited++;
     let payload:Record<string,unknown>;
     try{payload=json(JSON.parse(String(row.payload_json)));}catch{continue;}
-    if(payload.taxonomyGateVersion!==2||typeof payload.name!=='string'||payload.image)continue;
+    if(typeof payload.name!=='string'||payload.image)continue;
     // Defense-in-depth: do not fetch art for whole cities/provinces, even if
     // the caller forgot to run the cleanup command first.
     const kind=String(row.section);

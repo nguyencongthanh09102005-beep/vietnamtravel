@@ -57,7 +57,7 @@ function asPublic(row:Body) {
     versionId:String(row.current_version_id),name:text(payload.name,150),
     description:text(payload.description,850),detail:text(payload.detail,2400),
     image:text(payload.image,2000),imageLicense:text(payload.imageLicense,100),
-    imageAttribution:text(payload.imageAttribution,600),
+    imageAttribution:text(payload.imageAttribution,600),imageCreditUrl:text(payload.imageCreditUrl,600),
     sourceUrls:refs.length?refs:(sourceRef.startsWith('https://')?[sourceRef]:[])};
 }
 async function listItems(provinceId:string) {
@@ -72,6 +72,7 @@ async function listItems(provinceId:string) {
       versionId:'',name:text(payload.name),description:text(payload.description,850),
       detail:text(payload.detail,2400),image:text(payload.image,2000),
       imageLicense:text(payload.imageLicense,100),imageAttribution:text(payload.imageAttribution,600),
+      imageCreditUrl:text(payload.imageCreditUrl,600),
       sourceUrls:sources(payload.sourceUrls).length?sources(payload.sourceUrls):sources([payload.sourceUrl])});
   }
   for(const row of result.rows) {
@@ -95,7 +96,7 @@ async function summary() {
     const p=groups.get(item.provinceId);if(!p)continue;
     p.published++;
     if(!item.image)p.missingImages++;
-    else if(!item.imageAttribution || !item.imageLicense)p.missingCredits++;
+    else if(!item.imageAttribution || !item.imageCreditUrl || !item.imageLicense)p.missingCredits++;
     if(item.section==='cuisine' && item.sourceUrls.length===0)p.missingSources++;
   }
   for(const row of pending.rows) { const p=groups.get(String(row.province_id));if(p)p.pending=Number(row.count); }
@@ -220,12 +221,12 @@ async function reviewPhoto(body:Body,actor:string) {
       ((u.hostname==='upload.wikimedia.org' && u.pathname.startsWith('/wikipedia/commons/') && origin.hostname==='commons.wikimedia.org') ||
        (u.hostname==='live.staticflickr.com' && ['flickr.com','www.flickr.com'].includes(origin.hostname)));
   }catch { /* reject malformed URLs */ }
-  if(!allowedLicense(license)||!match||!attribution.trim())return json({error:'Ảnh không đủ thông tin giấy phép và nguồn gốc'},409);
   if(decision==='reject') {
     await dbQuery("UPDATE travel_image_candidates SET state='rejected' WHERE image_id=? AND state='pending'",[id]);
     await audit(actor,'photo_reject',cid,id);
     return json({ok:true,status:'rejected'});
   }
+  if(!allowedLicense(license)||!match||!attribution.trim())return json({error:'Ảnh không đủ thông tin giấy phép và nguồn gốc'},409);
   const core=await dbOne('SELECT candidate_id FROM travel_core_candidates WHERE candidate_id=?',[cid]);
   if(core){
     const result=await reviewPhotoImage(id,decision as 'approve'|'reject');

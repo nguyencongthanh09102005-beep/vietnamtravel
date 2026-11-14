@@ -7,7 +7,7 @@ import { provincesData } from '../../data/provincesData';
 type Tab='content'|'review'|'update'|'report';
 type Section='places'|'cuisine';
 type Item={id:string;provinceId:string;section:Section;versionId:string;name:string;
-  description:string;detail:string;image:string;imageLicense:string;imageAttribution:string;
+  description:string;detail:string;image:string;imageLicense:string;imageAttribution:string;imageCreditUrl:string;
   sourceUrls:string[];status:'published'|'archived'};
 type ProvinceStat={provinceId:string;name:string;published:number;pending:number;
   missingImages:number;missingSources:number;missingCredits:number;errors:number};
@@ -112,7 +112,7 @@ export function AdminDashboard() {
     (!kind||kind===item.section)&&
     (!quality || (quality==='missing-image'&&!item.image) ||
       (quality==='missing-source'&&item.section==='cuisine'&&item.sourceUrls.length===0) ||
-      (quality==='missing-credit'&&!!item.image&&(!item.imageLicense||!item.imageAttribution)) ||
+      (quality==='missing-credit'&&!!item.image&&(!item.imageLicense||!item.imageAttribution||!item.imageCreditUrl)) ||
       (quality==='archived'&&item.status==='archived'))&&
     (item.name+' '+provincesData[item.provinceId as keyof typeof provincesData]?.name)
       .toLocaleLowerCase('vi').includes(keyword.toLocaleLowerCase('vi'))

@@ -207,7 +207,7 @@ function localContentEnrichment(): Plugin {
         feedStartup = setTimeout(() => { void sources(); }, 16000);
         // No automatic publication of repaired photos.
         feedDaily = setInterval(() => { void sources(); }, 24 * 3600 * 1000);
-        photoDaily.unref?.(); feedDaily.unref?.();
+        photoDaily?.unref?.(); feedDaily.unref?.();
       });
       server.httpServer?.once('close', () => {
         closed = true;

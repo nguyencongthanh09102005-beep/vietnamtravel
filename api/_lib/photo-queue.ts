@@ -46,7 +46,7 @@ function safeCommonsFile(name:string){
 
 /** Keyword search produces review CANDIDATES, never a verified picture. */
 export async function searchCommonsImageCandidates(args:{
-  subject:string;province:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;onFailure?:(reason:string)=>void;
+  subject:string;province:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;
 }):Promise<ImageReviewCandidate[]>{
   const fetcher=args.fetcher??fetch;
   const query=(args.subject+' '+args.province).trim().slice(0,110);
@@ -141,7 +141,7 @@ export async function searchFlickrImageCandidates(args:{
  * underlying image to known Wikimedia/Flickr CDNs and require matching
  * original landing-page domains. Do NOT automatically display or publish. */
 export async function searchOpenverseImageCandidates(args:{
-  subject:string;province:string;fetcher?:typeof fetch;limit?:number;
+  subject:string;province:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;
 }):Promise<ImageReviewCandidate[]>{
   const query=(args.subject+' '+args.province).trim().slice(0,120);
   if(!args.subject.trim()||query.length<5)return [];

@@ -188,7 +188,7 @@ export function ItineraryDayMap({ provinceId, provinceName, stops, onEditStop }:
   const [retry, setRetry] = useState(0);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const searchable = useMemo(() => stops.filter(isSpecificMapStop), [stops]);
-  const signature = JSON.stringify({ provinceId, stops: searchable.map(s => [s.id, s.title, s.category]) });
+  const signature = JSON.stringify({ provinceId, stops: searchable.map(s => [s.id, s.placeId ?? null, s.title, s.category]) });
   const links = useMemo(() => dayDirectionsLinks(stops, provinceName, points), [stops, provinceName, points]);
   const airKm = useMemo(() => dayAirDistanceKm(stops, points), [stops, points]);
 
@@ -208,7 +208,7 @@ export function ItineraryDayMap({ provinceId, provinceName, stops, onEditStop }:
         const response = await fetch('/api/itineraries/locations', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ provinceId, stops: searchable.map(s => ({
-            id: s.id, title: s.title, category: s.category,
+            id: s.id, placeId: s.placeId ?? null, title: s.title, category: s.category,
           })) }),
           signal: controller.signal,
         });
@@ -273,7 +273,7 @@ export function ItineraryDayMap({ provinceId, provinceName, stops, onEditStop }:
                       <span className="block text-[11px] font-medium text-slate-500">{stop.startTime} · {periodName}</span>
                       <span className="mt-1 block break-words text-sm font-bold text-slate-900">{stop.title}</span>
                       <span className="mt-1 block text-[11px] text-slate-500">
-                        {positioned ? 'Có ghim bản đồ' : isSpecificMapStop(stop) ? 'Chưa định vị được' : 'Hoạt động không có vị trí cụ thể'}
+                        {positioned ? 'Có ghim bản đồ' : stop.placeId ? 'ID địa điểm chưa có trong kho bản đồ' : isSpecificMapStop(stop) ? 'Chưa định vị được (lịch trình cũ/thủ công)' : 'Hoạt động không có vị trí cụ thể'}
                       </span>
                     </span>
                   </button>
@@ -319,7 +319,7 @@ export function ItineraryDayMap({ provinceId, provinceName, stops, onEditStop }:
                 <MapPin className="h-4 w-4 text-emerald-700" aria-hidden="true"/> Bản đồ hành trình
               </h3>
               <p className="mt-1 text-xs text-slate-500">
-                {points.length}/{searchable.length} địa điểm đủ cụ thể đã ghim
+                {points.length}/{searchable.length} địa điểm đã ghim
                 {loading ? ' · Đang tìm vị trí…' : ''}
               </p>
             </div>

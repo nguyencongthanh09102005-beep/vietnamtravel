@@ -1,10 +1,10 @@
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 import { isSpecificMapStop, type MapStop, type MappedStop } from '../../src/utils/itinerary-map.js';
 import { databaseConfigured, dbOne, dbQuery, withinRateLimit } from '../_lib/auth.js';
-import { getPriorityMapPlaces, mapQueryKey, matchesMapProvince, matchKnownMapPlace, normalizeMapName } from '../_lib/itinerary-map-priority.js';
+import { getPriorityMapPlaces, mapQueryKey, matchesMapProvince, matchKnownMapPlace, matchKnownMapPlaceById, normalizeMapName } from '../_lib/itinerary-map-priority.js';
 
 const CACHE_AGE_MS = 60 * 24 * 3600 * 1000;
-const MISS_AGE_MS = 14 * 24 * 3600 * 1000;
+const MISS_AGE_MS = 6 * 3600 * 1000;
 const GLOBAL_INTERVAL_MS = 1600;
 const MAX_STOPS = 12;
 
@@ -25,8 +25,12 @@ function parseInput(value: unknown): { provinceId: ProvinceId; stops: MapStop[] 
     if (typeof stop.id !== 'string' || !/^[\w-]{1,80}$/.test(stop.id) || ids.has(stop.id) ||
         typeof stop.title !== 'string' || stop.title.length > 160 ||
         !['food', 'activities', 'transport', 'lodging'].includes(String(stop.category))) return null;
+    // A present but invalid placeId must not trigger a fallback by name.
+    if (stop.placeId !== undefined && stop.placeId !== null &&
+        (typeof stop.placeId !== 'string' || !/^p_[0-9a-f]{20}$/.test(stop.placeId))) return null;
     ids.add(stop.id);
-    stops.push({ id: stop.id, title: stop.title.trim(), category: stop.category as MapStop['category'] });
+    stops.push({ id: stop.id, title: stop.title.trim(), category: stop.category as MapStop['category'],
+      ...(typeof stop.placeId === 'string' ? { placeId: stop.placeId } : {}) });
   }
   return { provinceId: body.provinceId as ProvinceId, stops };
 }
@@ -107,12 +111,19 @@ export default {
       const points: MappedStop[] = [];
       const unseen: number[] = [];
       async function collect(index: number) {
-        const found = matchKnownMapPlace(valid[index].title, mappedPlaces);
-        if (found) {
-          points.push({ id: valid[index].id, lat: found.latitude,
-            lon: found.longitude, label: found.name });
+        const stop = valid[index];
+        // New AI-generated plans carry an authority-checked placeId. Never
+        // fall back to guessing by title if the ID is unknown/out of province.
+        const known = stop.placeId
+          ? matchKnownMapPlaceById(stop.placeId, mappedPlaces)
+          : matchKnownMapPlace(stop.title, mappedPlaces);
+        if (known) {
+          points.push({ id: stop.id, lat: known.latitude,
+            lon: known.longitude, label: known.name });
           return;
         }
+        if (stop.placeId) return;
+        // Name-based geocoding remains only for pre-existing/manual plans.
         const row = await dbOne('SELECT lat, lon, label, checked_at FROM place_geocodes WHERE query_key = ?', [keys[index]]);
         if (!row || Number(row.checked_at) <= now - (row.lat === null ? MISS_AGE_MS : CACHE_AGE_MS)) {
           unseen.push(index);

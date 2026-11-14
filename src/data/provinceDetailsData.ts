@@ -1,13 +1,30 @@
 import { provincesData, type ProvinceId } from './provincesData.js';
 
+/** Public editorial content may be sourced locally or from approved external references.
+ * Unavailable metadata is not a claim that a source/license was verified.
+ */
+export interface ProvinceDiscoveryItem {
+  name: string;
+  description: string;
+  image: string;
+  detail?: string;
+  sourceUrl?: string;
+  wikidataId?: string;
+  imageStatus?: 'verified' | 'pending';
+  imageAttribution?: string;
+  imageCreditUrl?: string;
+  imageLicense?: string;
+  imageMissingReason?: 'no_verified_photo' | 'no_candidate' | 'license_rejected' | 'pending_review';
+}
+
 export interface ProvinceContent {
   overview: {
     description: string;
     stats: Array<{ label: string; value: string }>;
   };
   history: Array<{ year: string; event: string }>;
-  places: Array<{ name: string; description: string; image: string }>;
-  cuisine: Array<{ name: string; description: string; image: string }>;
+  places: ProvinceDiscoveryItem[];
+  cuisine: ProvinceDiscoveryItem[];
 }
 
 export interface ProvinceDetailsCatalogItem {

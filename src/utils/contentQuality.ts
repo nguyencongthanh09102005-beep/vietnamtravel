@@ -95,5 +95,18 @@ export function evaluateContentTaxonomy(evidence: ContentTaxonomyEvidence):
     .map(normalizeContentText).filter(name=>name.length>3)
     .some(name=>(' '+firstLead+' ').includes(' '+name+' '));
   if (!matches) return {approved:false,reason:'Chưa chứng minh đây là nội dung của tỉnh trong phần mở đầu'};
+  // A casual mention of a province in a generic cuisine article does not
+  // establish a regional specialty. Require regional corroboration in either
+  // encyclopedia category or the Wikidata description before auto-approval.
+  // This is still not proof of EXCLUSIVITY or origin; it only makes the
+  // candidate eligible for the current content review workflow.
+  if (section === 'cuisine') {
+    const regionalAliases = provinceNames(provinceId)
+      .map(normalizeContentText).filter(alias => alias.length > 3);
+    const regionalMetadata = ' ' + normalizeContentText(
+      categoryTitles.join(' ') + ' ' + wikidataDescription) + ' ';
+    if (!regionalAliases.some(alias => regionalMetadata.includes(' ' + alias + ' ')))
+      return {approved:false,reason:'Bài viết món ăn chung: chưa có chuyên mục hoặc mô tả Wikidata xác nhận liên hệ với địa phương; cần duyệt nguồn địa phương'};
+  }
   return {approved:true,reason:'Wikidata và chuyên mục Wikipedia xác nhận phân loại, mở đầu khớp tỉnh'};
 }

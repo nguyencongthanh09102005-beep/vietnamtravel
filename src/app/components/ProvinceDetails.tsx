@@ -187,7 +187,7 @@ export function ProvinceDetails({ province }: { province: string }) {
                       aria-label={`Xem chi tiết ${place.name}`}
                       className="group overflow-hidden rounded-2xl border border-gray-100 bg-white text-left transition hover:border-emerald-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
                       <div className="h-40 overflow-hidden">
-                        <ImageWithFallback src={place.image} alt={place.name} loading="lazy"
+                        <ImageWithFallback src={place.image} alt={place.name} placeholderKind="places" loading="lazy"
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"/>
                       </div>
                       <div className="p-4">
@@ -203,13 +203,13 @@ export function ProvinceDetails({ province }: { province: string }) {
 
             {activeTab === 'cuisine' && (
               <div className="space-y-3">
-                <p className="text-xs text-gray-500">{data.cuisine.length} món ăn · Chọn món để xem chi tiết</p>
+                <p className="text-xs text-gray-500">{data.cuisine.length} gợi ý món ăn · Chọn món để xem chi tiết</p>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   {data.cuisine.map((food, index) => (
                     <button key={index} type="button" onClick={() => setSelectedItem({ kind: 'cuisine', index })}
                       aria-label={`Xem chi tiết ${food.name}`}
                       className="flex gap-4 rounded-2xl border border-gray-100 bg-white p-3 text-left transition hover:border-emerald-200 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
-                      <ImageWithFallback src={food.image} alt={food.name} loading="lazy"
+                      <ImageWithFallback src={food.image} alt={food.name} placeholderKind="cuisine" loading="lazy"
                         className="h-20 w-20 shrink-0 rounded-xl object-cover"/>
                       <div className="flex min-w-0 flex-col justify-center">
                         <h3 className="mb-1 font-semibold text-gray-900">{food.name}</h3>

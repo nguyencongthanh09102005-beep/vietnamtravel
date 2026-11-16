@@ -104,7 +104,7 @@ test('public discovery API merges approved content, ignores drafts, and retains 
 test('daily content refresh requires cron secret and never publishes unchecked suggestions', async () => {
   const previousSecret = process.env.CRON_SECRET;
   const originalFetch = globalThis.fetch;
-  const { default: cron } = await server.ssrLoadModule('/api/content/refresh.ts');
+  const { default: cron } = await server.ssrLoadModule('/server/api/content/refresh.ts');
   const baseUrl = 'https://example.test/api/content/refresh';
   const request = token => new Request(baseUrl, {
     headers: token ? { authorization: 'Bearer ' + token } : {},
@@ -139,7 +139,7 @@ test('daily content refresh requires cron secret and never publishes unchecked s
 
 test('draft review is denied without separate administrator authorization', async () => {
   const previous = process.env.CONTENT_REVIEW_SECRET;
-  const { default: review } = await server.ssrLoadModule('/api/content/review.ts');
+  const { default: review } = await server.ssrLoadModule('/server/api/content/review.ts');
   try {
     delete process.env.CONTENT_REVIEW_SECRET;
     assert.equal((await review.fetch(new Request('https://example.test/api/content/review'))).status,503);
@@ -157,7 +157,7 @@ test('draft review is denied without separate administrator authorization', asyn
 test('official administration watcher is authorized and preserves map/user data', async () => {
   const previous = process.env.CRON_SECRET;
   const originalFetch = globalThis.fetch;
-  const { default: check } = await server.ssrLoadModule('/api/administration/check.ts');
+  const { default: check } = await server.ssrLoadModule('/server/api/administration/check.ts');
   const officialPage = `<html><body><h1>Danh sách tỉnh thành sau sáp nhập</h1>
   <p>Kể từ năm 2025, cả nước có 34 đơn vị hành chính cấp tỉnh.</p>
   <h2>Chi tiết các tỉnh, thành phố hình thành sau sắp xếp</h2>
@@ -266,6 +266,9 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
   const previousKey = process.env.GEMINI_API_KEY;
   const originalFetch = globalThis.fetch;
   process.env.GEMINI_API_KEY = 'fake-test-key-only';
+  const { getPriorityMapPlaces } = await server.ssrLoadModule('/api/_lib/itinerary-map-priority.ts');
+  const mapPlaces = await getPriorityMapPlaces('Da Nang');
+  assert.ok(mapPlaces.length >= 3, 'Need three reference landmarks for grounded fixture');
   let secondDay = false;
   const generated = () => ({
     title: 'Đà Nẵng 3 ngày khám phá ẩm thực',
@@ -275,14 +278,14 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
       stops: [
         {
           id: 'd' + day + 's1', period: 'morning', startTime: '08:00',
-          title: day === 2 && secondDay ? 'Bánh canh' : 'Mì Quảng',
-          description: 'Đặc sản địa phương',
-          estimatedCostVnd: 140000, category: 'food', source: 'ai_suggestion',
+          placeId: day === 2 && secondDay ? mapPlaces[2].id : mapPlaces[0].id,
+          description: 'Tham quan địa danh có tọa độ đã kiểm tra',
+          estimatedCostVnd: 140000,
         },
         {
           id: 'd' + day + 's2', period: 'noon', startTime: '12:00',
-          title: 'Bánh tráng cuốn thịt heo', description: 'Món địa phương',
-          estimatedCostVnd: 180000, category: 'food', source: 'ai_suggestion',
+          placeId: mapPlaces[1].id, description: 'Khám phá điểm đến và ẩm thực gần đó',
+          estimatedCostVnd: 180000,
         },
       ],
     })),
@@ -315,7 +318,7 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     assert.equal(bad.status, 400);
 
     const response = await send('/api/itineraries/generate', 'POST', trip);
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 200, await response.clone().text());
     const output = await response.json();
     assert.equal(output.plan.schedule.length, 3);
     assert.equal(output.plan.budgetBreakdown.lodgingVnd, 900000);
@@ -369,9 +372,9 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     });
     assert.equal(replacement.status, 200);
     const revised = (await replacement.json()).plan;
-    assert.equal(revised.schedule[0].stops[0].title, 'Mì Quảng');
-    assert.equal(revised.schedule[1].stops[0].title, 'Bánh canh');
-    assert.equal(revised.schedule[2].stops[0].title, 'Mì Quảng');
+    assert.equal(revised.schedule[0].stops[0].title, mapPlaces[0].name);
+    assert.equal(revised.schedule[1].stops[0].title, mapPlaces[2].name);
+    assert.equal(revised.schedule[2].stops[0].title, mapPlaces[0].name);
 
     const patched = await send('/api/itineraries', 'PATCH', {
       id: item.id, revision: 1, plan: revised,
@@ -418,7 +421,7 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
 });
 
 
-test('day map API geocodes a specific landmark once and reuses the SQLite cache', async () => {
+test('day map API prefers reviewed landmarks and caches geocoding misses', async () => {
   const originalFetch = globalThis.fetch;
   let externalCalls = 0;
   globalThis.fetch = async (input, init) => {
@@ -458,15 +461,15 @@ test('day map API geocodes a specific landmark once and reuses the SQLite cache'
     assert.equal(first.pending, false);
     assert.equal(first.points.length, 1);
     assert.equal(first.points[0].id, stop.id);
-    assert.equal(first.points[0].lat, 16.061);
+    assert.ok(Math.abs(first.points[0].lat - 16.061) < 0.001, 'geocoding should preserve precise map coordinates');
     const cached = await call([stop]);
     assert.equal(cached.status, 200);
     assert.equal((await cached.json()).points.length, 1);
-    assert.equal(externalCalls, 1, 'A cached location must not call the public geocoder twice');
+    assert.equal(externalCalls, 0, 'Reviewed landmark coordinates should avoid public geocoder calls');
     const genericFood = await call([{ id: 'dish', title: 'Mì Quảng', category: 'food' }]);
     assert.equal(genericFood.status, 200);
     assert.deepEqual((await genericFood.json()).points, []);
-    assert.equal(externalCalls, 1, 'A generic dish is not a geographic location');
+    assert.equal(externalCalls, 0, 'A generic dish is not a geographic location');
 
     // The backend must not place a pin in another province or at a generic city center.
     // Wait for the globally shared 1.6-second Nominatim throttle before the next lookup.
@@ -475,11 +478,11 @@ test('day map API geocodes a specific landmark once and reuses the SQLite cache'
     const unmatched = await call([mismatch]);
     assert.equal(unmatched.status, 200);
     assert.deepEqual((await unmatched.json()).points, []);
-    assert.equal(externalCalls, 2);
+    assert.equal(externalCalls, 1);
     const cachedMiss = await call([mismatch]);
     assert.equal(cachedMiss.status, 200);
     assert.deepEqual((await cachedMiss.json()).points, []);
-    assert.equal(externalCalls, 2, 'A confirmed miss should be cached instead of repeatedly querying Nominatim');
+    assert.equal(externalCalls, 1, 'A confirmed miss should be cached instead of repeatedly querying Nominatim');
   } finally {
     globalThis.fetch = originalFetch;
   }

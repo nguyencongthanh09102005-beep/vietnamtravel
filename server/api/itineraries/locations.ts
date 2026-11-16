@@ -1,7 +1,7 @@
-import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
-import { isSpecificMapStop, type MapStop, type MappedStop } from '../../src/utils/itinerary-map.js';
-import { databaseConfigured, dbOne, dbQuery, withinRateLimit } from '../_lib/auth.js';
-import { getPriorityMapPlaces, mapQueryKey, matchesMapProvince, matchKnownMapPlace, pinForGroundedStop, normalizeMapName } from '../_lib/itinerary-map-priority.js';
+import { provincesData, type ProvinceId } from '../../../src/data/provincesData.js';
+import { isSpecificMapStop, type MapStop, type MappedStop } from '../../../src/utils/itinerary-map.js';
+import { databaseConfigured, dbOne, dbQuery, withinRateLimit } from '../../../api/_lib/auth.js';
+import { getPriorityMapPlaces, mapQueryKey, matchesMapProvince, matchKnownMapPlace, pinForGroundedStop, normalizeMapName } from '../../../api/_lib/itinerary-map-priority.js';
 
 const CACHE_AGE_MS = 60 * 24 * 3600 * 1000;
 const MISS_AGE_MS = 6 * 3600 * 1000;

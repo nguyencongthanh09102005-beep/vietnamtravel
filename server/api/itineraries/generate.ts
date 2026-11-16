@@ -1,10 +1,10 @@
-import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
-import { parseRequest, validateStoredPlan, recalculatePlan } from '../../src/utils/itinerary.js';
-import { generateGeminiText } from '../_lib/gemini.js';
-import { getPriorityMapPlaces } from '../_lib/itinerary-map-priority.js';
-import { bootstrapWikipediaMapPlaces } from '../_lib/wikipedia-geo.js';
-import { normalizeGroundedItinerary } from '../_lib/grounded-itinerary.js';
-import { databaseConfigured, withinRateLimit } from '../_lib/auth.js';
+import { provinceDetailsCatalog } from '../../../src/data/provinceDetailsData.js';
+import { parseRequest, validateStoredPlan, recalculatePlan } from '../../../src/utils/itinerary.js';
+import { generateGeminiText } from '../../../api/_lib/gemini.js';
+import { getPriorityMapPlaces } from '../../../api/_lib/itinerary-map-priority.js';
+import { bootstrapWikipediaMapPlaces } from '../../../api/_lib/wikipedia-geo.js';
+import { normalizeGroundedItinerary } from '../../../api/_lib/grounded-itinerary.js';
+import { databaseConfigured, withinRateLimit } from '../../../api/_lib/auth.js';
 
 function json(data: unknown, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });

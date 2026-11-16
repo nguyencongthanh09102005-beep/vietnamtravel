@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { dbOne, dbQuery, json } from '../_lib/auth.js';
-import { provincesData } from '../../src/data/provincesData.js';
+import { dbOne, dbQuery, json } from '../../../api/_lib/auth.js';
+import { provincesData } from '../../../src/data/provincesData.js';
 
 /**
  * Internal moderation API for candidates; it is never accessible with a user

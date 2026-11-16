@@ -1,5 +1,5 @@
-import { provincesData } from '../src/data/provincesData.js';
-import { dbOne, dbQuery, getRequestAuthSession, json } from './_lib/auth.js';
+import { provincesData } from '../../src/data/provincesData.js';
+import { dbOne, dbQuery, getRequestAuthSession, json } from '../../api/_lib/auth.js';
 
 interface UpdateBody {
   savedProvinces?: unknown;

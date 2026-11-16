@@ -1,6 +1,6 @@
-import { dbOne, dbQuery, getRequestAuthSession, json, makeId } from './_lib/auth.js';
-import { validateStoredPlan, type SavedItinerary } from '../src/utils/itinerary.js';
-import { getPriorityMapPlaces, matchKnownMapPlaceById, normalizeMapName } from './_lib/itinerary-map-priority.js';
+import { dbOne, dbQuery, getRequestAuthSession, json, makeId } from '../../api/_lib/auth.js';
+import { validateStoredPlan, type SavedItinerary } from '../../src/utils/itinerary.js';
+import { getPriorityMapPlaces, matchKnownMapPlaceById, normalizeMapName } from '../../api/_lib/itinerary-map-priority.js';
 
 function readSaved(row: Record<string, unknown>): SavedItinerary | null {
   try {

@@ -266,6 +266,9 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
   const previousKey = process.env.GEMINI_API_KEY;
   const originalFetch = globalThis.fetch;
   process.env.GEMINI_API_KEY = 'fake-test-key-only';
+  const { getPriorityMapPlaces } = await server.ssrLoadModule('/api/_lib/itinerary-map-priority.ts');
+  const mapPlaces = await getPriorityMapPlaces('Da Nang');
+  assert.ok(mapPlaces.length >= 3, 'Need three reference landmarks for grounded fixture');
   let secondDay = false;
   const generated = () => ({
     title: 'Đà Nẵng 3 ngày khám phá ẩm thực',
@@ -275,14 +278,14 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
       stops: [
         {
           id: 'd' + day + 's1', period: 'morning', startTime: '08:00',
-          title: day === 2 && secondDay ? 'Bánh canh' : 'Mì Quảng',
-          description: 'Đặc sản địa phương',
-          estimatedCostVnd: 140000, category: 'food', source: 'ai_suggestion',
+          placeId: day === 2 && secondDay ? mapPlaces[2].id : mapPlaces[0].id,
+          description: 'Tham quan địa danh có tọa độ đã kiểm tra',
+          estimatedCostVnd: 140000,
         },
         {
           id: 'd' + day + 's2', period: 'noon', startTime: '12:00',
-          title: 'Bánh tráng cuốn thịt heo', description: 'Món địa phương',
-          estimatedCostVnd: 180000, category: 'food', source: 'ai_suggestion',
+          placeId: mapPlaces[1].id, description: 'Khám phá điểm đến và ẩm thực gần đó',
+          estimatedCostVnd: 180000,
         },
       ],
     })),
@@ -369,9 +372,9 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     });
     assert.equal(replacement.status, 200);
     const revised = (await replacement.json()).plan;
-    assert.equal(revised.schedule[0].stops[0].title, 'Mì Quảng');
-    assert.equal(revised.schedule[1].stops[0].title, 'Bánh canh');
-    assert.equal(revised.schedule[2].stops[0].title, 'Mì Quảng');
+    assert.equal(revised.schedule[0].stops[0].title, mapPlaces[0].name);
+    assert.equal(revised.schedule[1].stops[0].title, mapPlaces[2].name);
+    assert.equal(revised.schedule[2].stops[0].title, mapPlaces[0].name);
 
     const patched = await send('/api/itineraries', 'PATCH', {
       id: item.id, revision: 1, plan: revised,

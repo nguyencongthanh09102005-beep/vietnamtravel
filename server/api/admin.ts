@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { dbOne, dbQuery, getRequestAuthSession, json, withinRateLimit } from './_lib/auth.js';
-import { archiveLegacyCatalog } from '../src/utils/contentArchive.js';
-import { provincesData, type ProvinceId } from '../src/data/provincesData.js';
-import { normalizedSubjectKey } from '../src/utils/contentQuality.js';
-import { reviewPhotoImage } from './_lib/photo-review.js';
-import { generateGeminiText } from './_lib/gemini.js';
-import { findSourceCandidates, saveSourceSuggestions,sourceGroup } from './_lib/source-finder.js';
+import { dbOne, dbQuery, getRequestAuthSession, json, withinRateLimit } from '../../api/_lib/auth.js';
+import { archiveLegacyCatalog } from '../../src/utils/contentArchive.js';
+import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
+import { normalizedSubjectKey } from '../../src/utils/contentQuality.js';
+import { reviewPhotoImage } from '../../api/_lib/photo-review.js';
+import { generateGeminiText } from '../../api/_lib/gemini.js';
+import { findSourceCandidates, saveSourceSuggestions,sourceGroup } from '../../api/_lib/source-finder.js';
 
 type Section = 'places' | 'cuisine';
 type Body = Record<string,unknown>;

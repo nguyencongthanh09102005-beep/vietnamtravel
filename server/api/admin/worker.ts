@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { json } from '../_lib/auth.js';
-import { processNextAdminJob } from '../_lib/admin-jobs.js';
+import { json } from '../../../api/_lib/auth.js';
+import { processNextAdminJob } from '../../../api/_lib/admin-jobs.js';
 
 export default {async fetch(request:Request) {
   if(request.method!=='GET')return json({error:'Method not allowed'},405);

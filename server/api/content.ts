@@ -1,8 +1,8 @@
-import { dbQuery, json } from './_lib/auth.js';
-import { provinceDetailsCatalog, type ProvinceDetailsCatalogItem } from '../src/data/provinceDetailsData.js';
-import { provincesData, type ProvinceId } from '../src/data/provincesData.js';
-import { archiveLegacyCatalog, type CatalogSection } from '../src/utils/contentArchive.js';
-import { AUTO_CONTENT_GATE_VERSION, evaluateContentTaxonomy, isSubjectExcluded, normalizedSubjectKey } from '../src/utils/contentQuality.js';
+import { dbQuery, json } from '../../api/_lib/auth.js';
+import { provinceDetailsCatalog, type ProvinceDetailsCatalogItem } from '../../src/data/provinceDetailsData.js';
+import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
+import { archiveLegacyCatalog, type CatalogSection } from '../../src/utils/contentArchive.js';
+import { AUTO_CONTENT_GATE_VERSION, evaluateContentTaxonomy, isSubjectExcluded, normalizedSubjectKey } from '../../src/utils/contentQuality.js';
 
 const legacyRows = archiveLegacyCatalog().records;
 const legacyById = new Map(legacyRows.map(row => [row.id, row]));

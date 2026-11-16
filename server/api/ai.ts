@@ -1,12 +1,12 @@
-import { provinceDetailsCatalog } from '../src/data/provinceDetailsData.js';
-import { provincesData } from '../src/data/provincesData.js';
+import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
+import { provincesData } from '../../src/data/provincesData.js';
 import {
   createGoogleMapsDirectionsUrl,
   createGoogleMapsSearchUrl,
   type MapAction,
   type PlaceCard,
-} from '../src/utils/googleMaps.js';
-import { generateGeminiText } from './_lib/gemini.js';
+} from '../../src/utils/googleMaps.js';
+import { generateGeminiText } from '../../api/_lib/gemini.js';
 
 interface HistoryItem {
   role: 'user' | 'assistant';

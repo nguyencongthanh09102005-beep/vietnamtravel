@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { dbQuery, json } from '../_lib/auth.js';
-import { provincesData } from '../../src/data/provincesData.js';
-import { resolveHistoricalProvince } from '../../src/data/historicalProvinceAliases.js';
+import { dbQuery, json } from '../../../api/_lib/auth.js';
+import { provincesData } from '../../../src/data/provincesData.js';
+import { resolveHistoricalProvince } from '../../../src/data/historicalProvinceAliases.js';
 
 /**
  * Dynamic aliases support approved administrative name changes without

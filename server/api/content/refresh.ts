@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { dbQuery, json } from '../_lib/auth.js';
-import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
-import { enrichSection } from '../_lib/auto-enrich.js';
+import { dbQuery, json } from '../../../api/_lib/auth.js';
+import { provincesData, type ProvinceId } from '../../../src/data/provincesData.js';
+import { enrichSection } from '../../../api/_lib/auto-enrich.js';
 
 /**
  * Scheduled source verification, identical to the local SQLite enrichment.

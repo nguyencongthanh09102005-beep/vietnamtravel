@@ -1,10 +1,10 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { dbOne, dbQuery, json } from '../_lib/auth.js';
-import { provincesData } from '../../src/data/provincesData.js';
+import { dbOne, dbQuery, json } from '../../../api/_lib/auth.js';
+import { provincesData } from '../../../src/data/provincesData.js';
 import {
   fetchOfficialDocument, parseOfficialAdministrativeSnapshot, parseOfficialProvinceNews,
   OFFICIAL_ADMIN_SNAPSHOT_URL, OFFICIAL_ADMIN_NEWS_URL,
-} from '../_lib/official-admin.js';
+} from '../../../api/_lib/official-admin.js';
 
 /**
  * Reads government sources and stages possible changes for verification.

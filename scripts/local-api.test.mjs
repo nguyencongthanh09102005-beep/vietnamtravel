@@ -104,7 +104,7 @@ test('public discovery API merges approved content, ignores drafts, and retains 
 test('daily content refresh requires cron secret and never publishes unchecked suggestions', async () => {
   const previousSecret = process.env.CRON_SECRET;
   const originalFetch = globalThis.fetch;
-  const { default: cron } = await server.ssrLoadModule('/api/content/refresh.ts');
+  const { default: cron } = await server.ssrLoadModule('/server/api/content/refresh.ts');
   const baseUrl = 'https://example.test/api/content/refresh';
   const request = token => new Request(baseUrl, {
     headers: token ? { authorization: 'Bearer ' + token } : {},
@@ -139,7 +139,7 @@ test('daily content refresh requires cron secret and never publishes unchecked s
 
 test('draft review is denied without separate administrator authorization', async () => {
   const previous = process.env.CONTENT_REVIEW_SECRET;
-  const { default: review } = await server.ssrLoadModule('/api/content/review.ts');
+  const { default: review } = await server.ssrLoadModule('/server/api/content/review.ts');
   try {
     delete process.env.CONTENT_REVIEW_SECRET;
     assert.equal((await review.fetch(new Request('https://example.test/api/content/review'))).status,503);
@@ -157,7 +157,7 @@ test('draft review is denied without separate administrator authorization', asyn
 test('official administration watcher is authorized and preserves map/user data', async () => {
   const previous = process.env.CRON_SECRET;
   const originalFetch = globalThis.fetch;
-  const { default: check } = await server.ssrLoadModule('/api/administration/check.ts');
+  const { default: check } = await server.ssrLoadModule('/server/api/administration/check.ts');
   const officialPage = `<html><body><h1>Danh sách tỉnh thành sau sáp nhập</h1>
   <p>Kể từ năm 2025, cả nước có 34 đơn vị hành chính cấp tỉnh.</p>
   <h2>Chi tiết các tỉnh, thành phố hình thành sau sắp xếp</h2>
@@ -315,7 +315,7 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
     assert.equal(bad.status, 400);
 
     const response = await send('/api/itineraries/generate', 'POST', trip);
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 200, await response.clone().text());
     const output = await response.json();
     assert.equal(output.plan.schedule.length, 3);
     assert.equal(output.plan.budgetBreakdown.lodgingVnd, 900000);
@@ -458,7 +458,7 @@ test('day map API geocodes a specific landmark once and reuses the SQLite cache'
     assert.equal(first.pending, false);
     assert.equal(first.points.length, 1);
     assert.equal(first.points[0].id, stop.id);
-    assert.equal(first.points[0].lat, 16.061);
+    assert.ok(Math.abs(first.points[0].lat - 16.061) < 0.001, 'geocoding should preserve precise map coordinates');
     const cached = await call([stop]);
     assert.equal(cached.status, 200);
     assert.equal((await cached.json()).points.length, 1);

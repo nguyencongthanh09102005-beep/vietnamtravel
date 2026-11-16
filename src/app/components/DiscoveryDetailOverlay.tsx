@@ -41,7 +41,7 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
   }, [onClose]);
 
   const isPlace = kind === 'places';
-  const label = isPlace ? 'Địa điểm du lịch' : 'Ẩm thực địa phương';
+  const label = isPlace ? 'Địa điểm du lịch' : 'Gợi ý ẩm thực';
   const mapsQuery = isPlace ? item.name + ', ' + provinceTitle : item.name + ' ở ' + provinceTitle;
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-950/60 p-2 backdrop-blur-[3px] sm:p-5"
@@ -49,7 +49,7 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
       <section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="discovery-detail-title"
         className="flex max-h-[94dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl outline-none sm:rounded-3xl">
         <div className="relative h-48 shrink-0 bg-slate-100 sm:h-72">
-          <ImageWithFallback src={item.image} alt={item.name} loading="eager" className="h-full w-full object-cover"/>
+          <ImageWithFallback src={item.imageStatus === 'pending' ? '' : item.image} alt={item.name} placeholderKind={kind} loading="eager" className="h-full w-full object-cover"/>
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent"/>
           <button type="button" onClick={onClose} aria-label="Đóng thông tin chi tiết"
             className="absolute right-3 top-3 rounded-full bg-white/95 p-2 text-gray-900 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
@@ -69,20 +69,42 @@ export function DiscoveryDetailOverlay({ kind, item, provinceTitle, onClose }: P
             {'detail' in item && typeof item.detail === 'string' && item.detail.trim()
               ? item.detail : item.description}
           </p>
-          {!('detail' in item && typeof item.detail === 'string' && item.detail.trim()) && (
+          {!item.detail?.trim() && (
             <p className="mt-5 rounded-xl bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-500">
               Thông tin chuyên sâu đang được bổ sung và đối chiếu nguồn. Nội dung hiện tại được giữ nguyên từ dữ liệu đã có.
             </p>
           )}
-          {'imageAttribution' in item && typeof item.imageAttribution === 'string' && item.imageAttribution.trim() && (
+          {!isPlace && (
+            <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+              Món ăn có thể xuất hiện ở nhiều địa phương. Việc giới thiệu tại {provinceTitle} không có nghĩa đây là đặc sản riêng hoặc có nguồn gốc từ địa phương này.
+              {!item.sourceUrl ? ' Chưa có liên kết nguồn địa phương cho nội dung này.' : ' Xem nguồn giới thiệu bên dưới và đối chiếu thêm nguồn địa phương khi cần.'}
+            </p>
+          )}
+          {(!item.image || item.imageStatus === 'pending') && (
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              Chưa có ảnh đúng chủ thể và giấy phép sử dụng đã được xác minh.
+            </p>
+          )}
+          {item.image && item.imageStatus !== 'verified' && (
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              Ảnh minh họa từ danh mục hiện có; nguồn và giấy phép chưa được thể hiện trong bản ghi này.
+            </p>
+          )}
+          {item.image && typeof item.imageAttribution === 'string' && item.imageAttribution.trim() && (
             <p className="mt-5 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-500">
               Ghi công ảnh: {item.imageAttribution}
             </p>
           )}
-          {'sourceUrl' in item && typeof item.sourceUrl === 'string' && /^https:\/\//.test(item.sourceUrl) ? (
+          {item.image && item.imageCreditUrl && /^https:\/\//.test(item.imageCreditUrl) ? (
+            <a className="mt-1 inline-flex text-xs font-medium text-blue-700 underline"
+              href={item.imageCreditUrl} target="_blank" rel="noopener noreferrer">
+              Xem nguồn và giấy phép ảnh <ExternalLink className="ml-1 h-3 w-3"/>
+            </a>
+          ) : null}
+          {typeof item.sourceUrl === 'string' && /^https:\/\//.test(item.sourceUrl) ? (
             <a className="mt-4 inline-flex text-xs font-medium text-blue-700 underline" href={item.sourceUrl}
               target="_blank" rel="noopener noreferrer">
-              {'wikidataId' in item && item.wikidataId ? 'Nguồn Wikipedia tiếng Việt · CC BY-SA' : 'Nguồn tham khảo'}
+              {item.wikidataId ? 'Nguồn nội dung Wikipedia (cần đối chiếu phạm vi địa phương)' : 'Nguồn tham khảo nội dung'}
               <ExternalLink className="ml-1 h-3 w-3"/></a>
           ) : null}
         </div>

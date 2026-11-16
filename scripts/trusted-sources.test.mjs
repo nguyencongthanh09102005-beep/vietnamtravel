@@ -46,27 +46,39 @@ test('Wikidata P18 produces an attributed photo even without a Wikipedia thumbna
   assert.equal(wrong,null);
 });
 
-test('previously published photo-less cards gain a new version without losing the original',async()=>{
+test('legacy photo repair stages a candidate without publishing any version',async()=>{
   const row={name:'Vịnh Hạ Long',description:'Một địa điểm du lịch',detail:'Nổi tiếng tại Quảng Ninh',
     image:'',wikidataId:'Q12345',imageStatus:'pending',taxonomyGateVersion:2,
     sourceUrl:'https://vi.wikipedia.org/wiki/Vinh_Ha_Long'};
-  await dbQuery(`INSERT INTO travel_content_versions
-    (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,created_at)
-    VALUES (?,?,?,?,?,'verified_external',?,'approved',?)`,
+  await dbQuery("INSERT INTO travel_content_versions (version_id,content_id,province_id,section,payload_json,source_kind,source_ref,reviewed_status,created_at) VALUES (?,?,?,?,?,'verified_external',?,'approved',?)",
     ['auto_v2_old','test-hal','Quang Ninh','places',JSON.stringify(row),row.sourceUrl,new Date().toISOString()]);
-  await dbQuery(`INSERT INTO travel_content_items(content_id,province_id,section,current_version_id,updated_at)
-    VALUES (?,?,?,?,?)`,['test-hal','Quang Ninh','places','auto_v2_old',new Date().toISOString()]);
-  const result=await repairMissingPhotos({fetcher:photoFetch(),maxItems:20});
-  assert.equal(result.updated,1);
-  const current=await dbQuery(`SELECT i.current_version_id,v.payload_json FROM travel_content_items i
-    JOIN travel_content_versions v ON v.version_id=i.current_version_id
-    WHERE i.content_id=?`,['test-hal']);
-  assert.match(String(current.rows[0].current_version_id),/^auto_v2_photo_/);
-  assert.equal(JSON.parse(String(current.rows[0].payload_json)).image,thumb);
-  const history=await dbQuery('SELECT COUNT(*) AS n FROM travel_content_versions WHERE content_id=?',['test-hal']);
-  assert.equal(history.rows[0].n,2);
-  const again=await repairMissingPhotos({fetcher:async()=>{throw Error('Already has photo')},maxItems:20});
-  assert.equal(again.updated,0);
+  await dbQuery('INSERT INTO travel_content_items(content_id,province_id,section,current_version_id,updated_at) VALUES (?,?,?,?,?)',
+    ['test-hal','Quang Ninh','places','auto_v2_old',new Date().toISOString()]);
+  const fetcher=async url=>{
+    const parsed=new URL(url);
+    assert.equal(parsed.hostname,'commons.wikimedia.org');
+    if(parsed.searchParams.get('list')==='search')return Response.json({query:{search:[{
+      ns:6,title:'File:Ha_Long_Bay.jpg',
+    }]}});
+    assert.equal(parsed.searchParams.get('titles'),'File:Ha_Long_Bay.jpg');
+    return Response.json({query:{pages:[{title:'File:Ha_Long_Bay.jpg',
+      imageinfo:[{thumburl:thumb,width:1200,height:800,
+        descriptionurl:'https://commons.wikimedia.org/wiki/File:Ha_Long_Bay.jpg',
+        extmetadata:{LicenseShortName:{value:'CC BY-SA 4.0'},Artist:{value:'Photographer Test'}}}]}]}});
+  };
+  const result=await repairMissingPhotos({fetcher,maxItems:20});
+  assert.equal(result.updated,0,'Never update a public image from background automation');
+  assert.equal(result.queued,1,'The discovered image only enters review queue');
+  const current=await dbQuery('SELECT current_version_id FROM travel_content_items WHERE content_id=?',['test-hal']);
+  assert.equal(current.rows[0].current_version_id,'auto_v2_old');
+  const versions=await dbQuery('SELECT COUNT(*) count FROM travel_content_versions WHERE content_id=?',['test-hal']);
+  assert.equal(versions.rows[0].count,1);
+  const pending=await dbQuery('SELECT state,license FROM travel_image_candidates WHERE content_id=?',['test-hal']);
+  assert.equal(pending.rows.length,1);
+  assert.equal(pending.rows[0].state,'pending');
+  assert.equal(pending.rows[0].license,'CC BY-SA 4.0');
+  const again=await repairMissingPhotos({fetcher,maxItems:20});
+  assert.equal(again.queued,0);
 });
 
 test('RSS extracts only headlines+short descriptions on approved host; never auto-publishes',async()=>{

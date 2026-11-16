@@ -44,7 +44,7 @@ export function makeOverpassQuery(provinceId:ProvinceId,group:OsmQueryGroup='tou
     // Never use a broad escape regex that can strip Vietnamese letters.
     const value=name;
     return '  area["name"="'+value+'"]["boundary"="administrative"]["admin_level"="4"];';
-  }).join('\\n');
+  }).join('\n');
   // The old query searched tourism + historic + natural across a whole
   // province in ONE request, routinely exhausting the public Overpass slots.
   // Retry only with a SMALLER tag set, never the same heavyweight query.
@@ -70,7 +70,7 @@ export function makeOverpassQuery(provinceId:ProvinceId,group:OsmQueryGroup='tou
     ...filters[group].map(part=>'  '+part),
     ');',
     'out center 60;',
-  ].join('\\n');
+  ].join('\n');
 }
 export function parseOsmDestinations(provinceId:ProvinceId,payload:unknown,max=40):OsmDestination[]{
   const elements=obj(payload).elements;
@@ -139,7 +139,12 @@ export async function queryOsmProvince(provinceId:ProvinceId,fetcher:typeof fetc
           rateLimited=true;
           throw Error('OVERPASS_RATE_LIMIT_429: stop and retry later');
         }
-        if(!response.ok)throw Error('OVERPASS_HTTP_'+response.status);
+        if(!response.ok){
+          // Overpass frequently includes a QL line/column in the HTTP error body.
+          const detail=(await response.text()).replace(/<[^>]*>/g,' ')
+            .replace(/\s+/g,' ').trim().slice(0,260);
+          throw Error('OVERPASS_HTTP_'+response.status+(detail?': '+detail:''));
+        }
         const body=await response.text();
         if(body.length>1_500_000)throw Error('OVERPASS_TOO_LARGE');
         const raw=obj(JSON.parse(body));
@@ -155,7 +160,7 @@ export async function queryOsmProvince(provinceId:ProvinceId,fetcher:typeof fetc
         }
         break;
       }catch(error){
-        const reason=String(error).slice(0,150);
+        const reason=String(error).slice(0,370);
         failures.push(group+' '+endpoint+': '+reason);
         console.warn('[OSM]',group,'failed at',endpoint,reason);
         if(reason.includes('OVERPASS_RATE_LIMIT_429'))break;

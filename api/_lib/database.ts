@@ -190,11 +190,48 @@ const schema = [
     PRIMARY KEY (osm_type,osm_id)
   )`,
   'CREATE INDEX IF NOT EXISTS travel_osm_by_province_idx ON travel_external_geodata(province_id)',
+  // Small, province-specific Wikipedia coordinates accepted only for known
+  // destination names whose article text confirms the correct province.
+  // Never published as editorial content or image records automatically.
+  `CREATE TABLE IF NOT EXISTS travel_wikipedia_geodata (
+    province_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    source_url TEXT NOT NULL,
+    checked_at INTEGER NOT NULL,
+    PRIMARY KEY(province_id,name)
+  )`,
+  'CREATE INDEX IF NOT EXISTS travel_wiki_province_idx ON travel_wikipedia_geodata(province_id)',
+  `CREATE TABLE IF NOT EXISTS travel_wiki_bootstrap (
+    province_id TEXT PRIMARY KEY,
+    attempted_at INTEGER NOT NULL,
+    found INTEGER NOT NULL DEFAULT 0
+  )`,
 
 
-
-
-
+  `CREATE TABLE IF NOT EXISTS travel_admin_audit (
+    audit_id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL,
+    content_id TEXT, version_id TEXT, reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS travel_admin_jobs (
+    job_id TEXT PRIMARY KEY, province_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK(kind IN ('photos','sources')),
+    state TEXT NOT NULL DEFAULT 'queued' CHECK(state IN ('queued','running','completed','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0, requested_by TEXT NOT NULL,
+    result_json TEXT NOT NULL DEFAULT '{}', error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT
+  )`,
+  'CREATE INDEX IF NOT EXISTS admin_jobs_status_idx ON travel_admin_jobs(state,created_at)',
+  `CREATE TABLE IF NOT EXISTS travel_content_source_suggestions (
+    content_id TEXT NOT NULL,province_id TEXT NOT NULL,section TEXT NOT NULL,
+    source_url TEXT NOT NULL,title TEXT NOT NULL,snippet TEXT NOT NULL,
+    source_host TEXT NOT NULL,provider TEXT NOT NULL,
+    review_status TEXT NOT NULL DEFAULT 'suggested',
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(content_id,source_url)
+  )`,
+  'CREATE INDEX IF NOT EXISTS source_suggestions_content_idx ON travel_content_source_suggestions(content_id,review_status)',
 ];
 
 const hosted = () => Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production';

@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { dbQuery } from './database.js';
 import { provinceDetailsCatalog } from '../../src/data/provinceDetailsData.js';
+import { archiveLegacyCatalog } from '../../src/utils/contentArchive.js';
 import { provincesData, type ProvinceId } from '../../src/data/provincesData.js';
 import { checkCoreSubjectSpecificity } from '../../src/utils/coreSubjectSpecificity.js';
 
 export interface ImageReviewCandidate {
-  image:string; sourceUrl:string; sourceKind:'commons'|'flickr';
+  image:string; sourceUrl:string; sourceKind:'commons'|'flickr'|'openverse';
   license:string; attribution:string; width:number; height:number;
 }
 const UA='VietnamTravel/1.0 (https://github.com/nguyencongthanh09102005-beep/vietnamtravel; source attribution)';
@@ -45,7 +46,7 @@ function safeCommonsFile(name:string){
 
 /** Keyword search produces review CANDIDATES, never a verified picture. */
 export async function searchCommonsImageCandidates(args:{
-  subject:string;province:string;fetcher?:typeof fetch;limit?:number;
+  subject:string;province:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;
 }):Promise<ImageReviewCandidate[]>{
   const fetcher=args.fetcher??fetch;
   const query=(args.subject+' '+args.province).trim().slice(0,110);
@@ -88,14 +89,14 @@ export async function searchCommonsImageCandidates(args:{
       if(candidates.length>=Math.min(args.limit??4,6))break;
     }
     return candidates;
-  }catch(error){console.warn('[photo-queue] Commons search unavailable',String(error).slice(0,130));return [];}
+  }catch(error){args.onFailure?.('Commons: '+String(error).slice(0,120));console.warn('[photo-queue] Commons search unavailable',String(error).slice(0,130));return [];}
 }
 
 /** Flickr requires a developer API key and separate commercial API rights.
  * Allow only CC BY, CC BY-SA and CC0: NEVER NC/ND/rights-reserved.
  * A search match is still ONLY a human-review candidate. */
 export async function searchFlickrImageCandidates(args:{
-  subject:string;province:string;apiKey?:string;fetcher?:typeof fetch;limit?:number;
+  subject:string;province:string;apiKey?:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;
 }):Promise<ImageReviewCandidate[]>{
   const key=(args.apiKey??'').trim();
   if(!key||!args.subject.trim())return [];
@@ -131,7 +132,57 @@ export async function searchFlickrImageCandidates(args:{
       if(candidates.length>=Math.min(args.limit??4,6))break;
     }
     return candidates;
-  }catch(error){console.warn('[photo-queue] Flickr search unavailable',String(error).slice(0,130));return [];}
+  }catch(error){args.onFailure?.('Flickr: '+String(error).slice(0,120));console.warn('[photo-queue] Flickr search unavailable',String(error).slice(0,130));return [];}
+}
+
+
+/** Openverse indexes multiple openly-licensed sources.
+ * Treat search results only as untrusted REVIEW CANDIDATES. We restrict the
+ * underlying image to known Wikimedia/Flickr CDNs and require matching
+ * original landing-page domains. Do NOT automatically display or publish. */
+export async function searchOpenverseImageCandidates(args:{
+  subject:string;province:string;fetcher?:typeof fetch;limit?:number;onFailure?:(reason:string)=>void;
+}):Promise<ImageReviewCandidate[]>{
+  const query=(args.subject+' '+args.province).trim().slice(0,120);
+  if(!args.subject.trim()||query.length<5)return [];
+  const endpoint=new URL('https://api.openverse.org/v1/images/');
+  endpoint.search=new URLSearchParams({
+    q:query,page_size:'10',license_type:'commercial',mature:'false',
+    filter_dead:'true',
+  }).toString();
+  try{
+    const response=await fetchJson(endpoint,args.fetcher??fetch,['api.openverse.org']);
+    if(!Array.isArray(response.results))return [];
+    const out:ImageReviewCandidate[]=[];
+    const cap=Math.max(1,Math.min(args.limit??3,4));
+    for(const candidate of response.results.slice(0,10)){
+      const row=json(candidate);
+      const rawLicense=String(row.license??'').toLowerCase();
+      const version=String(row.license_version??'');
+      const license=rawLicense==='cc0' && (version==='1.0'||version==='')
+        ? 'CC0 1.0'
+        : ['by','by-sa'].includes(rawLicense) &&
+          ['2.0','3.0','4.0'].includes(version)
+        ? 'CC '+rawLicense.toUpperCase()+' '+version : '';
+      if(!license)continue;
+      const image=String(row.url??'');
+      const original=String(row.foreign_landing_url??'');
+      const creator=text(row.creator);
+      const width=dims(row.width),height=dims(row.height);
+      const matchesHosts=(commonsCdn(image)&&original.startsWith('https://commons.wikimedia.org/wiki/File:')) ||
+        (flickrCdn(image)&&/^https:\/\/(?:www\.)?flickr\.com\/photos\/[^/]+\/\d+\//.test(original));
+      if(!matchesHosts||!creator||!bigEnough(width,height))continue;
+      out.push({image,sourceUrl:original,sourceKind:'openverse',
+        license,attribution:creator+' · '+license+' · '+original,
+        width,height});
+      if(out.length>=cap)break;
+    }
+    return out;
+  }catch(error){
+    args.onFailure?.('Openverse: '+String(error).slice(0,120));
+    console.warn('[photo-queue] Openverse search unavailable',String(error).slice(0,130));
+    return [];
+  }
 }
 
 function photoId(contentId:string,sourceUrl:string){
@@ -139,27 +190,42 @@ function photoId(contentId:string,sourceUrl:string){
 }
 /** All photo searches are additive to a queue. Nothing alters public cards. */
 export async function enqueueImagesForReview(options:{
-  fetcher?:typeof fetch;flickrApiKey?:string;maxItems?:number;
+  fetcher?:typeof fetch;flickrApiKey?:string;includeOpenverse?:boolean;maxItems?:number;
+  provinceId?:ProvinceId;includeLegacy?:boolean;offsetItems?:number;
+  provider?:'commons'|'openverse';
 }={}){
   const max=Math.max(1,Math.min(50,options.maxItems??25));
   const rows=await dbQuery(
     `SELECT i.content_id,i.province_id,i.section,v.payload_json
      FROM travel_content_items i JOIN travel_content_versions v
      ON v.version_id=i.current_version_id
-     WHERE i.current_version_id LIKE 'auto_v2_%'
-       AND v.reviewed_status='approved' AND i.section IN ('places','cuisine')
+     WHERE v.reviewed_status='approved' AND i.section IN ('places','cuisine')
      UNION ALL
      SELECT candidate_id AS content_id,province_id,section,
        json_object('name',name,'image',image_url,'taxonomyGateVersion',2) AS payload_json
      FROM travel_core_candidates WHERE status IN ('pending','ready_for_review')
      ORDER BY province_id,section LIMIT 400`,
   );
-  const summary={checked:0,newImages:0,missing:0};
-  for(const row of rows.rows){
-    if(summary.checked>=max)break;
+  const activeIds=new Set(rows.rows.map(row=>String(row.content_id)));
+  const legacy=options.includeLegacy ? archiveLegacyCatalog().records.filter(row=>
+    ['places','cuisine'].includes(row.section) && 'name' in row.payload &&
+    !('image' in row.payload && row.payload.image) && !activeIds.has(row.id) &&
+    (!options.provinceId || row.provinceId===options.provinceId))
+    .map(row=>({content_id:row.id,province_id:row.provinceId,section:row.section,
+      payload_json:JSON.stringify({...row.payload,taxonomyGateVersion:2})})) : [];
+  const hidden=await dbQuery('SELECT content_id FROM travel_content_quarantine');
+  const quarantined=new Set(hidden.rows.map(row=>String(row.content_id)));
+  const candidates=[...legacy,...rows.rows].filter(row=>
+    !quarantined.has(String(row.content_id)) &&
+    (!options.provinceId || String(row.province_id)===options.provinceId));
+  const summary={checked:0,newImages:0,missing:0,visited:0,errors:[] as string[]};
+  const offset=Math.max(0,Math.floor(options.offsetItems??0));
+  for(const row of candidates.slice(offset)){
+    if(summary.visited>=max)break;
+    summary.visited++;
     let payload:Record<string,unknown>;
     try{payload=json(JSON.parse(String(row.payload_json)));}catch{continue;}
-    if(payload.taxonomyGateVersion!==2||typeof payload.name!=='string'||payload.image)continue;
+    if(typeof payload.name!=='string'||payload.image)continue;
     // Defense-in-depth: do not fetch art for whole cities/provinces, even if
     // the caller forgot to run the cleanup command first.
     const kind=String(row.section);
@@ -168,14 +234,22 @@ export async function enqueueImagesForReview(options:{
     const id=String(row.province_id) as ProvinceId;
     const province=provinceDetailsCatalog[id]?.title??id;
     summary.checked++;
-    const fromCommons=await searchCommonsImageCandidates({
+    const fromCommons=options.provider==='openverse'?[]:await searchCommonsImageCandidates({
       subject:payload.name,province,fetcher:options.fetcher,limit:4,
+      onFailure:reason=>summary.errors.push(reason),
     });
     const fromFlickr=options.flickrApiKey ? await searchFlickrImageCandidates({
       subject:payload.name,province,apiKey:options.flickrApiKey,
       fetcher:options.fetcher,limit:4,
+      onFailure:reason=>summary.errors.push(reason),
     }) : [];
-    const combined=[...fromCommons,...fromFlickr].slice(0,5);
+    const fromOpenverse=options.includeOpenverse && options.provider!=='commons' ? await searchOpenverseImageCandidates({
+      subject:payload.name,province,fetcher:options.fetcher,limit:3,
+      onFailure:reason=>summary.errors.push(reason),
+    }) : [];
+    const combined=[...fromCommons,...fromFlickr,...fromOpenverse]
+      .filter((candidate,index,array)=>array.findIndex(item=>item.sourceUrl===candidate.sourceUrl)===index)
+      .slice(0,5);
     if(!combined.length)summary.missing++;
     for(const item of combined){
       const result=await dbQuery(
@@ -189,7 +263,8 @@ export async function enqueueImagesForReview(options:{
       );
       summary.newImages+=result.changes;
     }
-    if(!options.fetcher)await new Promise(resolve=>setTimeout(resolve,400));
+    if(!options.fetcher)await new Promise(resolve=>setTimeout(resolve,
+      options.includeOpenverse ? 1200 : 400));
   }
   return summary;
 }

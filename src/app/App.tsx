@@ -8,6 +8,7 @@ import { TravelCollections } from './components/TravelCollections';
 import { AiItineraryPlanner } from './components/AiItineraryPlanner';
 import { UserMenu } from './components/UserMenu';
 import { VietnamMap } from './components/VietnamMap';
+import { AdminDashboard } from './components/AdminDashboard';
 import { provincesData, type ProvinceId } from '../data/provincesData';
 import { resolveHistoricalProvince, searchHistoricalProvinces } from '../data/historicalProvinceAliases';
 import type { AuthStateResponse, AuthUser } from '../types/auth';
@@ -148,6 +149,11 @@ export default function App() {
     setGuestMode(false);
     setAiOpen(false);
   };
+
+  // A separate admin surface; access is enforced by /api/admin, never by this UI.
+  if (typeof window !== 'undefined' && window.location.pathname === '/admin') {
+    return <AdminDashboard />;
+  }
 
   let content;
 

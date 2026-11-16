@@ -149,6 +149,7 @@ export async function assessCandidate(candidate: DiscoveryCandidate,
         imageAttribution: attribution,
         imageLicense: license || undefined,
         imageStatus: photo ? 'verified' : 'pending',
+        ...(!photo ? { imageMissingReason: 'no_verified_photo' as const } : {}),
         wikidataId:itemId,
         taxonomyGateVersion:AUTO_CONTENT_GATE_VERSION,
         taxonomyEvidence:{ categories: categories.slice(0,20), wikidataDescription },
@@ -206,7 +207,7 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
       normalizedSubjectKey(row.payload.name,provinceId) === name);
     const contentId = old?.id ?? candidate.contentId;
     const verdict = await assessCandidate(candidate,fetcher);
-    const status = verdict.approved ? 'approved' : 'pending';
+    const status = 'pending'; // Automated eligibility is not human approval.
     if (verdict.approved && old && 'name' in old.payload) {
       // Preserve the author's own display name (Don Quảng Ngãi instead of
       // the encyclopedic disambiguation title "Don (món ăn)").
@@ -220,33 +221,9 @@ export async function enrichSection(provinceId: ProvinceId, section: Section, op
       [versionId,contentId,provinceId,section,JSON.stringify(verdict.payload),
         candidate.sourceRef,status,now.toISOString(),now.toISOString()]);
     if (!row.changes) continue;
-    if (verdict.approved) {
-      const active = await dbQuery(
-        `INSERT OR IGNORE INTO travel_content_items(content_id,province_id,section,current_version_id,updated_at)
-        VALUES (?,?,?,?,?)`,[contentId,provinceId,section,versionId,now.toISOString()]);
-      let published = active.changes;
-      if (!published && old) {
-        // A previously imported manual version may be replaced by a verified
-        // revision, but existing verified versions are never overwritten.
-        const current = await dbOne(
-          `SELECT i.current_version_id,v.source_kind FROM travel_content_items i
-           JOIN travel_content_versions v ON v.version_id=i.current_version_id
-           WHERE i.content_id=? AND i.province_id=? AND i.section=?`,
-          [contentId,provinceId,section]);
-        if (current?.source_kind === 'legacy_manual' ||
-            String(current?.current_version_id ?? '').startsWith('auto_')) {
-          const updated = await dbQuery(
-            `UPDATE travel_content_items SET current_version_id=?,updated_at=?
-             WHERE content_id=? AND current_version_id=?`,
-            [versionId,now.toISOString(),contentId,String(current?.current_version_id ?? '')]);
-          published += updated.changes;
-        }
-      }
-      base.approved += published;
-      names.set(name,{sourceKind:'verified_external',versionId});
-    } else {
-      base.pending++;
-    }
+    // Candidate is staged for moderation, never directly published.
+    base.pending++;
+
   }
   await dbQuery(
     `INSERT INTO travel_content_enrichment(scan_key,checked_at,found,approved,pending)

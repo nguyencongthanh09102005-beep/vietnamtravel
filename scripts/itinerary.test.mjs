@@ -91,3 +91,20 @@ test('rejects malformed AI JSON data including missing days and fake prices', ()
   }, trip), null);
   assert.equal(normalizeItinerary({ ...raw, schedule: raw.schedule.map(d => ({ ...d, day: 2 })) }, trip), null);
 });
+
+test('legacy plans remain valid while new plans preserve placeId after load/save', async () => {
+  const { stablePlaceId } = await import('../.api-test-dist/api/_lib/itinerary-map-priority.js');
+  const id = stablePlaceId('Da Nang', 'Cầu Rồng');
+  const original = normalizeItinerary(raw, parseRequest(request));
+  assert.ok(original);
+  assert.equal(original.schedule[0].stops[0].placeId, undefined);
+  const newData = {
+    ...original, schedule: original.schedule.map((day, i) => ({
+      ...day, stops: day.stops.map((stop, j) =>
+        i === 0 && j === 0 ? { ...stop, placeId: id } : stop),
+    })),
+  };
+  const loaded = validateStoredPlan(newData);
+  assert.equal(loaded?.schedule[0].stops[0].placeId, id);
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded)).schedule[0].stops[0].placeId, id);
+});

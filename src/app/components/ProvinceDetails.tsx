@@ -1,17 +1,19 @@
+import { TravelServicesPanel } from './TravelServicesPanel';
 import { useEffect, useState, type ComponentType } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Camera, Clock, Info, MapPin, Utensils } from 'lucide-react';
+import { Camera, Clock, Info, MapPin, Ticket, Utensils } from 'lucide-react';
 import { DiscoveryDetailOverlay, type DiscoveryKind } from './DiscoveryDetailOverlay';
 import { provinceDetailsCatalog, type ProvinceDetailsCatalogItem } from '../../data/provinceDetailsData';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
-type TabType = 'overview' | 'history' | 'places' | 'cuisine';
+type TabType = 'overview' | 'history' | 'places' | 'cuisine' | 'services';
 
 const TABS: Array<{ id: TabType; label: string; icon: ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: 'Tổng quan', icon: Info },
   { id: 'history', label: 'Lịch sử', icon: Clock },
   { id: 'places', label: 'Địa điểm', icon: Camera },
   { id: 'cuisine', label: 'Ẩm thực', icon: Utensils },
+  { id: 'services', label: 'Dịch vụ', icon: Ticket },
 ];
 
 function formatStatValue(value: string) {
@@ -22,7 +24,8 @@ export function ProvinceDetails({ province }: { province: string }) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedItem, setSelectedItem] = useState<{ kind: DiscoveryKind; index: number } | null>(null);
   const [remote, setRemote] = useState<{ provinceId: string; data: ProvinceDetailsCatalogItem } | null>(null);
-  const current = remote?.provinceId === province ? remote.data : provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
+  // Do not show an archived legacy card before the public API responds.
+  const current = remote?.provinceId === province ? remote.data : undefined;
 
   useEffect(() => {
     setActiveTab('overview');
@@ -37,13 +40,16 @@ export function ProvinceDetails({ province }: { province: string }) {
         signal: controller.signal,
         cache: 'no-store',
       }).then(async response => {
-        if (!response.ok) return;
+        if (!response.ok) throw Error('CONTENT_API_UNAVAILABLE');
         const payload = await response.json() as { provinceId?: string; data?: ProvinceDetailsCatalogItem };
         if (!controller.signal.aborted && payload.provinceId === province && payload.data?.data) {
           setRemote({ provinceId: province, data: payload.data });
         }
       }).catch(() => {
-        // Original content remains visible when dynamic content is unavailable.
+        if (controller.signal.aborted) return;
+        // Keep the overview but not unmoderated cards while DB is unavailable.
+        const base = provinceDetailsCatalog[province as keyof typeof provinceDetailsCatalog];
+        if (base) setRemote({provinceId:province,data:{...base,data:{...base.data,places:[],cuisine:[]}}});
       }).finally(() => { inFlight = false; });
     };
     refresh();
@@ -59,6 +65,9 @@ export function ProvinceDetails({ province }: { province: string }) {
     };
   }, [province]);
 
+  if (!current && province in provinceDetailsCatalog) {
+    return <div className="flex h-full items-center justify-center rounded-2xl bg-white text-sm text-slate-500" role="status">Đang tải nội dung đã kiểm duyệt...</div>;
+  }
   if (!current) {
     return (
       <div className="flex h-full w-full items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-center shadow-sm">
@@ -185,7 +194,7 @@ export function ProvinceDetails({ province }: { province: string }) {
                       aria-label={`Xem chi tiết ${place.name}`}
                       className="group overflow-hidden rounded-2xl border border-gray-100 bg-white text-left transition hover:border-emerald-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
                       <div className="h-40 overflow-hidden">
-                        <ImageWithFallback src={place.image} alt={place.name} loading="lazy"
+                        <ImageWithFallback src={place.imageStatus === 'pending' ? '' : place.image} alt={place.name} placeholderKind="places" loading="lazy"
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"/>
                       </div>
                       <div className="p-4">
@@ -201,13 +210,13 @@ export function ProvinceDetails({ province }: { province: string }) {
 
             {activeTab === 'cuisine' && (
               <div className="space-y-3">
-                <p className="text-xs text-gray-500">{data.cuisine.length} món ăn · Chọn món để xem chi tiết</p>
+                <p className="text-xs text-gray-500">{data.cuisine.length} gợi ý món ăn · Chọn món để xem chi tiết</p>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   {data.cuisine.map((food, index) => (
                     <button key={index} type="button" onClick={() => setSelectedItem({ kind: 'cuisine', index })}
                       aria-label={`Xem chi tiết ${food.name}`}
                       className="flex gap-4 rounded-2xl border border-gray-100 bg-white p-3 text-left transition hover:border-emerald-200 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
-                      <ImageWithFallback src={food.image} alt={food.name} loading="lazy"
+                      <ImageWithFallback src={food.imageStatus === 'pending' ? '' : food.image} alt={food.name} placeholderKind="cuisine" loading="lazy"
                         className="h-20 w-20 shrink-0 rounded-xl object-cover"/>
                       <div className="flex min-w-0 flex-col justify-center">
                         <h3 className="mb-1 font-semibold text-gray-900">{food.name}</h3>
@@ -218,6 +227,9 @@ export function ProvinceDetails({ province }: { province: string }) {
                   ))}
                 </div>
               </div>
+            )}
+            {activeTab === 'services' && (
+              <TravelServicesPanel provinceName={title} provinceId={province} />
             )}
           </motion.div>
         </AnimatePresence>

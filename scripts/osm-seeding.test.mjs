@@ -47,6 +47,9 @@ const fake=async(url,opts)=>{
 
 test('OSM queries only selected province boundaries; 34 supported local areas',async()=>{
   const query=makeOverpassQuery('Can Tho');
+  assert.ok(query.includes('\n'), 'Queries must contain actual newline characters');
+  assert.ok(!query.includes('\\n'), 'Literal backslash-n breaks Overpass QL');
+  assert.ok(!makeOverpassQuery('Can Tho','tourism-lite').includes('\\n'), 'Fallback query must be valid too');
   assert.match(query,/area\[\"name\"=\"Cần Thơ\"\]/);
   assert.doesNotMatch(query,/area\[\"name\"=\"Quảng Ninh\"\]/);
   assert.throws(()=>makeOverpassQuery('Truong Sa'));
@@ -140,4 +143,9 @@ test('Overpass 200 with runtime error remark is not counted as empty province',a
   };
   await assert.rejects(()=>queryOsmProvince('Can Tho',failing),/OVERPASS_RUNTIME/);
   assert.equal(calls.length,2,'Try a single reduced backup query, then report real failure');
+});
+
+test('Overpass HTTP 400 includes server parse diagnostic and does not stage data',async()=>{
+  const invalid=async()=>new Response('<html><body>line 4: parse error in query</body></html>',{status:400});
+  await assert.rejects(()=>queryOsmProvince('Can Tho',invalid),/line 4: parse error/);
 });

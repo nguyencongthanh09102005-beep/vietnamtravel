@@ -1,60 +1,40 @@
 import React, { useEffect, useState } from 'react';
+import { ImageOff, MapPin, Utensils } from 'lucide-react';
 
-const ERROR_IMG_SRC =
-  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODgiIGhlaWdodD0iODgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZyIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIuMyIgZmlsbD0ibm9uZSIgc3Ryb2tlLXdpZHRoPSIzLjciPjxyZWN0IHg9IjE2IiB5PSIxNiIgd2lkdGg9IjU2IiBoZWlnaHQ9IjU2IiByeD0iNiIvPjxwYXRoIGQ9Im0xNiA1OCAxNi0xOCAzMiAzMiIvPjxjaXJjbGUgY3g9IjUzIiBjeT0iMzUiIHI9IjciLz48L3N2Zz4KCg==';
+type PlaceholderKind = 'places' | 'cuisine' | 'generic';
 
-export function ImageWithFallback(props: React.ImgHTMLAttributes<HTMLImageElement>) {
+type ImageWithFallbackProps = React.ImgHTMLAttributes<HTMLImageElement> & {
+  placeholderKind?: PlaceholderKind;
+};
+
+/** A real SVG icon, not a fake broken <img> data URI. Distinguishes missing
+ * verified media from a browser load failure (404, CORS or network issue).
+ */
+export function ImageWithFallback(props: ImageWithFallbackProps) {
   const [didError, setDidError] = useState(false);
-  const { src, alt, style, className, onError, ...rest } = props;
+  const { src, alt, style, className, onError, placeholderKind = 'generic', ...rest } = props;
+  useEffect(() => setDidError(false), [src]);
 
-  useEffect(() => {
-    setDidError(false);
-  }, [src]);
-
-  if (!src) {
+  if (!src || didError) {
+    const missing = !src;
+    const Icon = placeholderKind === 'cuisine' ? Utensils
+      : placeholderKind === 'places' ? MapPin : ImageOff;
+    const label = missing ? 'Chưa có ảnh xác minh' : 'Ảnh tạm thời không tải được';
     return (
-      <div className={`flex items-center justify-center bg-gradient-to-br from-emerald-50 to-slate-100 ${className ?? ''}`}
-        style={style} role="img" aria-label={alt ? `Chưa có ảnh cho ${alt}` : 'Chưa có ảnh'}>
-        <div className="flex flex-col items-center justify-center gap-2 text-center text-slate-500">
-          <img src={ERROR_IMG_SRC} alt="" aria-hidden="true" className="h-9 w-9 opacity-35" />
-          <span className="text-[11px] font-medium">Chưa có ảnh xác minh</span>
+      <div className={'flex items-center justify-center overflow-hidden bg-gradient-to-br from-emerald-50 to-slate-100 ' + (className ?? '')}
+        role="img" aria-label={alt ? label + ' cho ' + alt : label} style={style}
+        data-media-status={missing ? 'no-verified-photo' : 'load-failed'}>
+        <div className="flex flex-col items-center justify-center gap-2 px-2 text-center text-slate-500">
+          <Icon aria-hidden="true" className="h-8 w-8 shrink-0 opacity-45"/>
+          <span className="text-[11px] font-medium leading-4">{label}</span>
         </div>
       </div>
     );
   }
 
-  if (didError) {
-    return (
-      <div
-        className={`inline-block bg-gray-100 text-center align-middle ${className ?? ''}`}
-        style={style}
-        role="img"
-        aria-label={alt || 'Không thể tải hình ảnh'}
-      >
-        <div className="flex h-full w-full items-center justify-center">
-          <img
-            src={ERROR_IMG_SRC}
-            alt=""
-            aria-hidden="true"
-            className="h-14 w-14 opacity-60"
-            data-original-url={src}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      style={style}
-      {...rest}
-      onError={(event) => {
-        setDidError(true);
-        onError?.(event);
-      }}
-    />
-  );
+  return <img src={src} alt={alt} className={className} style={style} {...rest}
+    onError={event => {
+      setDidError(true);
+      onError?.(event);
+    }}/>;
 }

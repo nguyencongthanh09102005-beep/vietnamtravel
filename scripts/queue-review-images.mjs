@@ -7,8 +7,8 @@ for(const key of ['TURSO_DATABASE_URL','TURSO_AUTH_TOKEN',
 if(process.env.TURSO_DATABASE_URL||process.env.TURSO_AUTH_TOKEN||process.env.VERCEL)
   throw Error('SAFETY_STOP: local SQLite only');
 const args=process.argv.slice(2);
-if(args.some(x=>x!=='--list'&&!/^--max=\d+$/.test(x)))
-  throw Error('Usage: npm run catalog:image-queue -- --max=25 [--list]');
+if(args.some(x=>!['--list','--openverse'].includes(x)&&!/^--max=\d+$/.test(x)))
+  throw Error('Usage: npm run catalog:image-queue -- --max=25 [--openverse] [--list]');
 const { dbQuery,closeLocalDatabase } =
   await import('../.api-test-dist/api/_lib/database.js');
 const { quarantineGenericCoreCandidates } =
@@ -26,8 +26,12 @@ try {
     if(process.env.FLICKR_API_KEY&&!key)
       console.log('Flickr SKIPPED: requires explicit permission for commercial API use, set FLICKR_API_COMMERCIAL_APPROVED=1 only after approval.');
     const max=Number((args.find(x=>x.startsWith('--max='))??'--max=25').split('=')[1]);
-    const result=await enqueueImagesForReview({maxItems:max,flickrApiKey:key});
+    const result=await enqueueImagesForReview({
+      maxItems:max,flickrApiKey:key,includeOpenverse:args.includes('--openverse'),includeLegacy:true,
+    });
     console.log('IMAGE REVIEW QUEUE:',result);
+    if(args.includes('--openverse'))
+      console.log('Openverse results are only candidates; independently check the original photo, creator, commercial license and subject before approving.');
   }
   const rows=await dbQuery(
     `SELECT image_id,province_id,section,subject_name,source_kind,license,width,height,

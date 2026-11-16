@@ -1,4 +1,4 @@
-import { avatarUrlOk, dbOne, dbQuery, getRequestAuthSession, json, publicUser, validProfileName } from '../_lib/auth.js';
+import { avatarUrlOk, dbOne, dbQuery, getRequestAuthSession, json, publicUser, validProfileName } from '../../../api/_lib/auth.js';
 
 export default {
   async fetch(request: Request) {

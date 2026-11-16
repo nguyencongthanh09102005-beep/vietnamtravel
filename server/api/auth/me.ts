@@ -1,4 +1,4 @@
-import { clearedCookies, databaseConfigured, getRequestAuthSession, json } from '../_lib/auth.js';
+import { clearedCookies, databaseConfigured, getRequestAuthSession, json } from '../../../api/_lib/auth.js';
 
 export default {
   async fetch(request: Request) {

@@ -1,4 +1,4 @@
-import { dbOne, dbQuery, json, makeToken, normalizeEmail, sha256, validEmail, withinRateLimit, nowSeconds } from '../_lib/auth.js';
+import { dbOne, dbQuery, json, makeToken, normalizeEmail, sha256, validEmail, withinRateLimit, nowSeconds } from '../../../api/_lib/auth.js';
 
 const responseMessage = 'Nếu email đã đăng ký, bạn sẽ nhận được liên kết đặt lại mật khẩu.';
 export default {

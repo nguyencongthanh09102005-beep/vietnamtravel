@@ -1,4 +1,4 @@
-import { dbOne, dbQuery, hashPassword, json, nowSeconds, sha256 } from '../_lib/auth.js';
+import { dbOne, dbQuery, hashPassword, json, nowSeconds, sha256 } from '../../../api/_lib/auth.js';
 
 export default {
   async fetch(request: Request) {

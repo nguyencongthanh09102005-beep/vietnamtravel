@@ -1,4 +1,4 @@
-import { clearedCookies, getRequestAuthSession, json, revokeSession } from '../_lib/auth.js';
+import { clearedCookies, getRequestAuthSession, json, revokeSession } from '../../../api/_lib/auth.js';
 
 export default {
   async fetch(request: Request) {

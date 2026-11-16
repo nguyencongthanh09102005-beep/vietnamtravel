@@ -1,4 +1,4 @@
-import { createSession, dbOne, hashPassword, json, normalizeEmail, publicUser, sessionCookie, validEmail, verifyPassword, withinRateLimit } from '../_lib/auth.js';
+import { createSession, dbOne, hashPassword, json, normalizeEmail, publicUser, sessionCookie, validEmail, verifyPassword, withinRateLimit } from '../../../api/_lib/auth.js';
 
 export default {
   async fetch(request: Request) {

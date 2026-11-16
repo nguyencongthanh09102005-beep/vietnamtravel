@@ -421,7 +421,7 @@ test('AI planner generates, saves, edits, regenerates a day, and enforces user i
 });
 
 
-test('day map API geocodes a specific landmark once and reuses the SQLite cache', async () => {
+test('day map API prefers reviewed landmarks and caches geocoding misses', async () => {
   const originalFetch = globalThis.fetch;
   let externalCalls = 0;
   globalThis.fetch = async (input, init) => {
@@ -465,11 +465,11 @@ test('day map API geocodes a specific landmark once and reuses the SQLite cache'
     const cached = await call([stop]);
     assert.equal(cached.status, 200);
     assert.equal((await cached.json()).points.length, 1);
-    assert.equal(externalCalls, 1, 'A cached location must not call the public geocoder twice');
+    assert.equal(externalCalls, 0, 'Reviewed landmark coordinates should avoid public geocoder calls');
     const genericFood = await call([{ id: 'dish', title: 'Mì Quảng', category: 'food' }]);
     assert.equal(genericFood.status, 200);
     assert.deepEqual((await genericFood.json()).points, []);
-    assert.equal(externalCalls, 1, 'A generic dish is not a geographic location');
+    assert.equal(externalCalls, 0, 'A generic dish is not a geographic location');
 
     // The backend must not place a pin in another province or at a generic city center.
     // Wait for the globally shared 1.6-second Nominatim throttle before the next lookup.
@@ -478,11 +478,11 @@ test('day map API geocodes a specific landmark once and reuses the SQLite cache'
     const unmatched = await call([mismatch]);
     assert.equal(unmatched.status, 200);
     assert.deepEqual((await unmatched.json()).points, []);
-    assert.equal(externalCalls, 2);
+    assert.equal(externalCalls, 1);
     const cachedMiss = await call([mismatch]);
     assert.equal(cachedMiss.status, 200);
     assert.deepEqual((await cachedMiss.json()).points, []);
-    assert.equal(externalCalls, 2, 'A confirmed miss should be cached instead of repeatedly querying Nominatim');
+    assert.equal(externalCalls, 1, 'A confirmed miss should be cached instead of repeatedly querying Nominatim');
   } finally {
     globalThis.fetch = originalFetch;
   }

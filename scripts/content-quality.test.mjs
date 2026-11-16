@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { evaluateContentTaxonomy, isSubjectExcluded, normalizedSubjectKey } from '../.api-test-dist/src/utils/contentQuality.js';
-import { mergeVerifiedContent } from '../.api-test-dist/api/content.js';
+import { mergeVerifiedContent } from '../.api-test-dist/server/api/content.js';
 import { provinceDetailsCatalog } from '../.api-test-dist/src/data/provinceDetailsData.js';
 
 const verdict=(name,section,provinceId,description,categoryTitles,wikidataDescription)=>

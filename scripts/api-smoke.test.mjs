@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, test } from 'node:test';
 
-const { default: ai } = await import('../.api-test-dist/api/ai.js');
-const { default: recover } = await import('../.api-test-dist/api/auth/recover.js');
-const { default: userData } = await import('../.api-test-dist/api/user-data.js');
+const { default: ai } = await import('../.api-test-dist/server/api/ai.js');
+const { default: recover } = await import('../.api-test-dist/server/api/auth/recover.js');
+const { default: userData } = await import('../.api-test-dist/server/api/user-data.js');
 const originalFetch = globalThis.fetch;
 const originalEnv = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,

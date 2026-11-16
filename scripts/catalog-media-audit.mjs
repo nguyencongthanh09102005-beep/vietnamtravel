@@ -9,7 +9,7 @@ if(process.argv.length>2)throw Error('Usage: npm run catalog:media-audit');
 const { dbQuery,closeLocalDatabase } =
   await import('../.api-test-dist/api/_lib/database.js');
 const { mergeVerifiedContent } =
-  await import('../.api-test-dist/api/content.js');
+  await import('../.api-test-dist/server/api/content.js');
 const { provincesData } =
   await import('../.api-test-dist/src/data/provincesData.js');
 

@@ -11,7 +11,7 @@ process.env.TURSO_AUTH_TOKEN = '';
 
 const { assessCandidate, enrichSection } = await import('../.api-test-dist/api/_lib/auto-enrich.js');
 const { closeLocalDatabase, dbQuery } = await import('../.api-test-dist/api/_lib/database.js');
-const { default: contentApi } = await import('../.api-test-dist/api/content.js');
+const { default: contentApi } = await import('../.api-test-dist/server/api/content.js');
 after(() => {
   closeLocalDatabase();
   rmSync(dir,{recursive:true,force:true});

@@ -11,8 +11,8 @@ process.env.TURSO_DATABASE_URL='';
 process.env.TURSO_AUTH_TOKEN='';
 process.env.ADMIN_EMAILS='admin@example.test';
 const {dbQuery,closeLocalDatabase}=await import('../.api-test-dist/api/_lib/database.js');
-const {default:admin}=await import('../.api-test-dist/api/admin.js');
-const {default:publicContent}=await import('../.api-test-dist/api/content.js');
+const {default:admin}=await import('../.api-test-dist/server/api/admin.js');
+const {default:publicContent}=await import('../.api-test-dist/server/api/content.js');
 const {archiveLegacyCatalog}=await import('../.api-test-dist/src/utils/contentArchive.js');
 after(()=>{closeLocalDatabase();rmSync(dir,{recursive:true,force:true});});
 
